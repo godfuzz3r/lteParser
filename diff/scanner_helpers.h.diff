@@ -1,0 +1,11 @@
+diff --git a/srsue/src/scanner_helpers.h b/srsue/src/scanner_helpers.h
+index 3564f35a2..2fdb52d64 100644
+--- a/srsue/src/scanner_helpers.h
++++ b/srsue/src/scanner_helpers.h
+@@ -1,2 +1,3 @@
+ extern int time_spent;
+-extern bool program_stopping;
+\ No newline at end of file
++extern bool program_stopping;
++extern int dl_earfcn;
+\ No newline at end of file

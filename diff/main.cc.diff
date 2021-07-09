@@ -1,0 +1,136 @@
+diff --git a/srsue/src/main.cc b/srsue/src/main.cc
+index f915e1e30..0f2a49c7c 100644
+--- a/srsue/src/main.cc
++++ b/srsue/src/main.cc
+@@ -19,6 +19,7 @@
+  *
+  */
+ 
++#include "scanner_helpers.h"
+ #include "srsran/common/common_helper.h"
+ #include "srsran/common/config_file.h"
+ #include "srsran/common/crash_handler.h"
+@@ -41,6 +42,9 @@
+ #include <unistd.h>
+ 
+ extern bool simulate_rlf;
++int time_spent;
++bool program_stopping;
++int dl_earfcn;
+ 
+ using namespace std;
+ using namespace srsue;
+@@ -71,6 +75,7 @@ static int parse_args(all_args_t* args, int argc, char* argv[])
+   bpo::options_description common("Configuration options");
+   // clang-format off
+   common.add_options()
++    ("ue.timeout",      bpo::value<int>(&args->general.timeout)->default_value(10), "timeout before stop searching sibs")
+     ("ue.radio", bpo::value<string>(&args->rf.type)->default_value("multi"), "Type of the radio [multi]")
+     ("ue.phy", bpo::value<string>(&args->phy.type)->default_value("lte"), "Type of the PHY [lte]")
+     ("ue.stack", bpo::value<string>(&args->stack.type)->default_value("lte"), "Type of the upper stack [lte, nr]")
+@@ -123,7 +128,7 @@ static int parse_args(all_args_t* args, int argc, char* argv[])
+     ("rat.eutra.dl_freq",      bpo::value<float>(&args->phy.dl_freq)->default_value(-1),            "Downlink Frequency (if positive overrides EARFCN)")
+     ("rat.eutra.ul_freq",      bpo::value<float>(&args->phy.ul_freq)->default_value(-1),            "Uplink Frequency (if positive overrides EARFCN)")
+     ("rat.eutra.nof_carriers", bpo::value<uint32_t>(&args->phy.nof_lte_carriers)->default_value(1), "Number of carriers")
+-    
++
+     ("rat.nr.bands",        bpo::value<string>(&args->stack.rrc_nr.supported_bands_nr_str)->default_value("78"),  "Supported NR bands")
+     ("rat.nr.nof_carriers", bpo::value<uint32_t>(&args->phy.nof_nr_carriers)->default_value(0),                   "Number of NR carriers")
+     ("rat.nr.max_nof_prb",  bpo::value<uint32_t>(&args->phy.nr_max_nof_prb)->default_value(106),                  "Maximum NR carrier bandwidth in PRB")
+@@ -151,7 +156,7 @@ static int parse_args(all_args_t* args, int argc, char* argv[])
+     ("pcap.mac_filename", bpo::value<string>(&args->stack.pkt_trace.mac_pcap.filename)->default_value("/tmp/ue_mac.pcap"), "MAC layer capture filename")
+     ("pcap.mac_nr_filename", bpo::value<string>(&args->stack.pkt_trace.mac_nr_pcap.filename)->default_value("/tmp/ue_mac_nr.pcap"), "MAC_NR layer capture filename")
+     ("pcap.nas_filename", bpo::value<string>(&args->stack.pkt_trace.nas_pcap.filename)->default_value("/tmp/ue_nas.pcap"), "NAS layer capture filename")
+-    
++
+     ("gui.enable", bpo::value<bool>(&args->gui.enable)->default_value(false), "Enable GUI plots")
+ 
+     ("log.rf_level", bpo::value<string>(&args->rf.log_level), "RF log level")
+@@ -503,7 +508,7 @@ static int parse_args(all_args_t* args, int argc, char* argv[])
+     }
+   }
+ 
+-  cout << "Reading configuration file " << config_file << "..." << endl;
++  fprintf(stderr, "Reading configuration file ");
+   ifstream conf(config_file.c_str(), ios::in);
+   if (conf.fail()) {
+     cout << "Failed to read configuration file " << config_file << " - exiting" << endl;
+@@ -618,15 +623,6 @@ static void* input_loop(void*)
+       break;
+     } else {
+       if (key == "t") {
+-        do_metrics = !do_metrics;
+-        if (do_metrics) {
+-          cout << "Enter t to stop trace." << endl;
+-        } else {
+-          cout << "Enter t to restart trace." << endl;
+-        }
+-        if (metrics_screen) {
+-          metrics_screen->toggle_print(do_metrics);
+-        }
+       } else if (key == "rlf") {
+         simulate_rlf = true;
+         cout << "Sending Radio Link Failure" << endl;
+@@ -684,6 +680,8 @@ int main(int argc, char* argv[])
+ 
+   srsran::check_scaling_governor(args.rf.device_name);
+ 
++  program_stopping = false;
++  dl_earfcn = std::stoi(args.phy.dl_earfcn);
+   // Create UE instance.
+   srsue::ue ue;
+   if (ue.init(args)) {
+@@ -691,44 +689,32 @@ int main(int argc, char* argv[])
+     return SRSRAN_SUCCESS;
+   }
+ 
+-  srsran::metrics_hub<ue_metrics_t> metricshub;
+-  metrics_stdout                    _metrics_screen;
+-
+-  metrics_screen = &_metrics_screen;
+-  metricshub.init(&ue, args.general.metrics_period_secs);
+-  metricshub.add_listener(metrics_screen);
+-  metrics_screen->set_ue_handle(&ue);
+-
+-  metrics_csv metrics_file(args.general.metrics_csv_filename, args.general.metrics_csv_append);
+-  if (args.general.metrics_csv_enable) {
+-    metricshub.add_listener(&metrics_file);
+-    metrics_file.set_ue_handle(&ue);
+-    if (args.general.metrics_csv_flush_period_sec > 0) {
+-      metrics_file.set_flush_period((uint32_t)args.general.metrics_csv_flush_period_sec);
+-    }
+-  }
+-
+   pthread_t input;
+   pthread_create(&input, nullptr, &input_loop, &args);
+ 
+-  cout << "Attaching UE..." << endl;
++  fprintf(stderr, "Attaching UE...\n");
+   ue.switch_on();
+ 
+   if (args.gui.enable) {
+     ue.start_plot();
+   }
+ 
++  time_spent = 0;
+   while (running) {
++    if (time_spent > args.general.timeout && args.general.timeout != 0){
++      std::cout << "[-] can't decode SIBs after " << args.general.timeout << " seconds, shutting down" << std::endl;
++      program_stopping = true;
++      raise(SIGTERM);
++    }
+     sleep(1);
++    time_spent++;
+   }
+ 
+   ue.switch_off();
+   pthread_cancel(input);
+   pthread_join(input, nullptr);
+-  metricshub.stop();
+-  metrics_file.stop();
+   ue.stop();
+-  cout << "---  exiting  ---" << endl;
++  fprintf(stderr, "---  exiting  ---");
+ 
+   return SRSRAN_SUCCESS;
+ }

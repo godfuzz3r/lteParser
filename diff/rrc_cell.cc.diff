@@ -1,0 +1,36 @@
+diff --git a/srsue/src/stack/rrc/rrc_cell.cc b/srsue/src/stack/rrc/rrc_cell.cc
+index 66e5ffbdb..5e3363c08 100644
+--- a/srsue/src/stack/rrc/rrc_cell.cc
++++ b/srsue/src/stack/rrc/rrc_cell.cc
+@@ -65,6 +65,31 @@ void meas_cell_eutra::set_sib3(const asn1::rrc::sib_type3_s& sib3_)
+   sib3           = sib3_;
+   has_valid_sib3 = true;
+ }
++void meas_cell_eutra::set_sib4(const asn1::rrc::sib_type4_s& sib4_)
++{
++  sib4           = sib4_;
++  has_valid_sib4 = true;
++}
++void meas_cell_eutra::set_sib5(const asn1::rrc::sib_type5_s& sib5_)
++{
++  sib5           = sib5_;
++  has_valid_sib5 = true;
++}
++void meas_cell_eutra::set_sib6(const asn1::rrc::sib_type6_s& sib6_)
++{
++  sib6           = sib6_;
++  has_valid_sib6 = true;
++}
++void meas_cell_eutra::set_sib7(const asn1::rrc::sib_type7_s& sib7_)
++{
++  sib7           = sib7_;
++  has_valid_sib7 = true;
++}
++void meas_cell_eutra::set_sib8(const asn1::rrc::sib_type8_s& sib8_)
++{
++  sib8           = sib8_;
++  has_valid_sib8 = true;
++}
+ void meas_cell_eutra::set_sib13(const asn1::rrc::sib_type13_r9_s& sib13_)
+ {
+   sib13           = sib13_;

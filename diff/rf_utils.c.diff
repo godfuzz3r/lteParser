@@ -1,0 +1,20 @@
+diff --git a/lib/src/phy/rf/rf_utils.c b/lib/src/phy/rf/rf_utils.c
+index 0ac08cdd8..be9334a15 100644
+--- a/lib/src/phy/rf/rf_utils.c
++++ b/lib/src/phy/rf/rf_utils.c
+@@ -214,13 +214,13 @@ int rf_cell_search(srsran_rf_t*       rf,
+     } else {
+       printf(" ");
+     }
+-    printf("Found Cell_id: %3d %s, CP: %s, DetectRatio=%2.0f%% PSR=%.2f, Power=%.1f dBm\n",
++    /*printf("Found Cell_id: %3d %s, CP: %s, DetectRatio=%2.0f%% PSR=%.2f, Power=%.1f dBm\n",
+            found_cells[i].cell_id,
+            found_cells[i].frame_type == SRSRAN_FDD ? "FDD" : "TDD",
+            srsran_cp_string(found_cells[i].cp),
+            found_cells[i].mode * 100,
+            found_cells[i].psr,
+-           srsran_convert_amplitude_to_dB(found_cells[i].peak * 1000));
++           srsran_convert_amplitude_to_dB(found_cells[i].peak * 1000));*/
+   }
+ 
+   // Save result

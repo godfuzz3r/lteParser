@@ -1,0 +1,12 @@
+diff --git a/srsue/CMakeLists.txt b/srsue/CMakeLists.txt
+index a5e7fa5a4..842fbe2ce 100644
+--- a/srsue/CMakeLists.txt
++++ b/srsue/CMakeLists.txt
+@@ -48,4 +48,5 @@ add_subdirectory(test)
+ ########################################################################
+ # Default configuration files
+ ########################################################################
+-install(FILES ue.conf.example DESTINATION ${DATA_DIR})
+\ No newline at end of file
++install(FILES ue.conf.example DESTINATION ${DATA_DIR})
++

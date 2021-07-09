@@ -1,0 +1,13 @@
+diff --git a/srsue/src/phy/lte/cc_worker.cc b/srsue/src/phy/lte/cc_worker.cc
+index 7ee696e75..a78263755 100644
+--- a/srsue/src/phy/lte/cc_worker.cc
++++ b/srsue/src/phy/lte/cc_worker.cc
+@@ -150,7 +150,7 @@ bool cc_worker::set_cell_unlocked(srsran_cell_t cell_)
+ 
+     if (cell.frame_type == SRSRAN_TDD && ue_dl_cfg.chest_cfg.estimator_alg != SRSRAN_ESTIMATOR_ALG_INTERPOLATE) {
+       chest_default_cfg.estimator_alg = SRSRAN_ESTIMATOR_ALG_INTERPOLATE;
+-      srsran::console("Enabling subframe interpolation for TDD cells (recommended setting)\n");
++      fprintf(stderr, "Enabling subframe interpolation for TDD cells (recommended setting)\n");
+     }
+ 
+     cell_initiated = true;
