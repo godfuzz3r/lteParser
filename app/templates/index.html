@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Main page{% endblock %}
+
+{% block content %}
+  {{ super() }}
+  <div class="container">
+    <form action="/" method="POST">
+        {{ form.hidden_tag() }}
+        {{ wtf.form_field(form.band) }}
+        {{ wtf.form_field(form.reachable_only) }}
+        {{ wtf.form_field(form.submit) }}
+      </form>
+      <br/>
+    <table class="table table-bordered">
+      <thead>
+          <tr>
+              <th>Band</th>
+              <th>EARFCN</th>
+              <th>Scanned</th>
+              <th>Reachable</th>
+              <th>SIBs</th>
+          </tr>
+      </thead>
+      <tbody>
+          {% for cell in cells %}
+          <tr>
+              <td>{{ cell['band'] }}</td>
+              <td>{{ cell['earfcn'] }}</td>
+              <td>{{ cell['last_scan'] }}</td>
+              <td>{{ cell['reachable'] }}</td>
+              <td><a href="/cell/{{cell['earfcn']}}">{{ cell['sibs'] }}</a></td>
+              <td>
+                <button id="rescan" onclick="fetch('/api/job', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({job: 'cell_parse', earfcn: {{cell['earfcn']}}})})">Rescan SIBs</button>
+              </td>
+          </tr>
+          {% endfor %}
+      </tbody>
+  </table>
+</div>
+{% endblock %}

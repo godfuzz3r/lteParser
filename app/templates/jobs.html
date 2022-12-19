@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Main page{% endblock %}
+
+{% block content %}
+  {{ super() }}
+  <div class="container">
+    <h4>Job queue:</h4>
+    <table class="table table-bordered">
+        <tbody>
+            {% for job in jobs %}
+            <tr>
+                <td>
+                    <code style="white-space: pre;">{{job}}</code>
+                </td>
+                <td>
+                    <button class="btn btn-default" id="remove" onclick="fetch('/api/job/remove', {method: 'POST', headers: {'Content-Type': 'application/json'}, body:JSON.stringify({{job}})});location.reload()">Remove</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <h4>Scan table</h4>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Band</th>
+                    <th>Frequency</th>
+                    <th>start_earfcn</th>
+                    <th>end_earfcn</th>
+                    <th>priority</th>
+                    <th>finished</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for band in bands %}
+                {% set form = forms[band['band']] %}
+                <form action="/jobs" method="POST">
+                    <tr>
+                        <td>{{ band['band'] }}{{ wtf.form_field(form.band) }}</td>
+                        <td>{{ band['frequency'] }}</td>
+                        <td>{{ wtf.form_field(form.start_earfcn) }}</td>
+                        <td>{{ wtf.form_field(form.end_earfcn) }}</td>
+                        <td>{{ wtf.form_field(form.priority) }}</td>
+                        <td>{{ wtf.form_field(form.finished) }}</td>
+                        <td><input class="btn btn-default" id="save" name="save" type="submit" value="Save"></td>
+                    </tr>
+                </form>
+                {% endfor %}
+            </tbody>
+        </table>
+</div>
+{% endblock %}

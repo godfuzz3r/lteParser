@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Main page{% endblock %}
+
+{% block content %}
+  {{ super() }}
+  <div class="container">
+    <h4>Band scan</h4>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Band</th>
+                <th>start_earfcn</th>
+                <th>end_earfcn</th>
+                <th>priority</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>{{ wtf.form_field(form.band) }}</td>
+                <td>{{ wtf.form_field(form.start_earfcn) }}</td>
+                <td>{{ wtf.form_field(form.end_earfcn) }}</td>
+                <td>{{ wtf.form_field(form.priority) }}</td>
+                <td>
+                    <button class="btn btn-default" id="rescan" onclick="fetch('/api/job', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({job: 'cell_search', band: parseInt(document.getElementById('band').value), start_earfcn: parseInt(document.getElementById('start_earfcn').value), end_earfcn: parseInt(document.getElementById('end_earfcn').value)})})">Add</button>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    <h4>Parse cell SIBs</h4>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Earfcn</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><input class="form-control" id="earfcn" name="earfcn" style="width: 11ch; height: 3ch" type="number" value=""></td>
+                <td>
+                    <button class="btn btn-default" id="rescan" onclick="fetch('/api/job', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({job: 'cell_parse', earfcn: parseInt(document.getElementById('earfcn').value)})})">Add</button>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    <h4>Enable autoscan</h4>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>enable</th>
+                    <th></th>
+                </tr>
+            </thead>    
+            <tr>
+                <form method="POST" action="{{url_for('newjob')}}"/>
+                <td>
+                    {{ wtf.form_field(autoscanForm.autoscan) }}
+                </td>
+                <td>
+                    {{ wtf.form_field(autoscanForm.save) }}
+                </td>
+                </form>
+            </tr>
+        </table>
+</div>
+{% endblock %}

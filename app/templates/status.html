@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block title %}Main page{% endblock %}
+
+{% block content %}
+  {{ super() }}
+  <div class="container">
+    <code style="white-space: pre;">{{status}}</code>
+</div>
+{% endblock %}
