@@ -63,9 +63,9 @@ for cell in cursor.fetchall():
         priority = sib3["cellReselectionServingFreqInfo"]["cellReselectionPriority"]
 
     mcc_mnc = format_mcc_mnc(sib1)
-    if mcc not in mcc_mnc:
+    if mcc and mcc not in mcc_mnc:
         continue
-    if mnc not in mcc_mnc:
+    if mnc and mnc not in mcc_mnc:
         continue
 
     print("Band\tEARFCN\tRSRP\tTAC\tcellIdentity\tPriority\tMCC\tMNC\t")
