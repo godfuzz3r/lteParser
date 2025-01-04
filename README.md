@@ -4,10 +4,10 @@ A combination of cell_search and srsue with disabled tx, which allows to parse M
 
 logic:
 - cell_search
-- if a station found, remember where we stopped in cell_search
-- launch srsue on found station, try parse SIBs with specified timeout
-- if SIB5 found, launch srsue on all found EARFCN's, SIBs are also parsed from there. Then recursively to the previous step
-- when there are no stations left from SIB5, continue the cell_search search from the place where we stopped
+- if a cell found, remember where cell_search stopped
+- launch srsue for found cell, try parse SIBs with specified timeout
+- if SIB5 found, launch srsue for all neighboring EARFCN's from it. Then recursively to the previous step
+- when there are no stations left from SIB5, continue the cell_search search from the place where it was stopped
 - all MIBs/SIBs are stored into sqlite
 
 ## launch
