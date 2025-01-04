@@ -49,7 +49,6 @@ for cell in cursor.fetchall():
 
     sib1 = json.loads(cell[3])
 
-    outInfo = "{0}\t{1}\t{2}\t{3}\t{4:8d}\t{5:1d}\t\t{6}"
     band = cell[0]
     earfcn = cell[1]
     rsrp = cell[2]
@@ -60,7 +59,9 @@ for cell in cursor.fetchall():
     sib3 = None
     if cell[4]:
         sib3 = json.loads(cell[4])
-        priority = sib3["cellReselectionServingFreqInfo"]["cellReselectionPriority"]
+        priority = int(
+            sib3["cellReselectionServingFreqInfo"]["cellReselectionPriority"]
+        )
 
     mcc_mnc = format_mcc_mnc(sib1)
     if mcc and mcc not in mcc_mnc:
@@ -68,7 +69,12 @@ for cell in cursor.fetchall():
     if mnc and mnc not in mcc_mnc:
         continue
 
+    if isinstance(priority, int):
+        outInfo = "{0}\t{1}\t{2}\t{3}\t{4:8d}\t{5:1d}\t\t{6}"
+    else:
+        outInfo = "{0}\t{1}\t{2}\t{3}\t{4:8d}\t{5:1s}\t\t{6}"
     print("Band\tEARFCN\tRSRP\tTAC\tcellIdentity\tPriority\tMCC\tMNC\t")
+    print(priority, type(priority))
     print(outInfo.format(band, earfcn, rsrp, tac, cellIdentity, priority, mcc_mnc))
 
     if sib3:
