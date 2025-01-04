@@ -1,6 +1,6 @@
 ## lte searcher LTE and MIB/SIB parser
 
-A combination of cell_search and srsue with disabled tx, which allows to parse MIBs and SIBs of base stations.
+A combination of cell_search and srsue with disabled tx, which allows to parse MIBs and SIBs.
 
 logic:
 - cell_search
