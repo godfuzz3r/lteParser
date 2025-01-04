@@ -71,22 +71,27 @@ usage: sib-scan.sh [OPTION]...
 
 ## usage example
 
-exec into container:
-```
+connect SDR and exec into container:
+```bash
 ./run.sh
 ```
 
 scan band 7 with limesdr:
-```
+```bash
 ./sib-scan.sh -d soapy -a "rxant=LNAH" -b 7 -d /vol/output/place1_band7.sqlite
 ```
 
 parse data with dbhelper scripts:
-```
+```bash
 cd ./vol
 python3 dbparsers/list-cells.py -d ./output/place1.sqlite # show basic info for all scanned earfcn's
-python3 dbparsers/get-info.py -d ./output/place1.sqlite # for each earfcn show info about neighbours
 ```
+![cell basic info](./doc/1.png)
+
+```bash
+python3 dbparsers/get-info.py -d ./output/place1.sqlite # for each earfcn show SIB3/SIB5 info
+```
+![cell basic info](./doc/2.png)
 
 rescan arfcn's that already parsed:
 ```
