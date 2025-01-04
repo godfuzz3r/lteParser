@@ -74,7 +74,6 @@ for cell in cursor.fetchall():
     else:
         outInfo = "{0}\t{1}\t{2}\t{3}\t{4:8d}\t{5:1s}\t\t{6}"
     print("Band\tEARFCN\tRSRP\tTAC\tcellIdentity\tPriority\tMCC\tMNC\t")
-    print(priority, type(priority))
     print(outInfo.format(band, earfcn, rsrp, tac, cellIdentity, priority, mcc_mnc))
 
     if sib3:
