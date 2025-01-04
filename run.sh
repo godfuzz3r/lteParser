@@ -17,5 +17,4 @@ docker run \
   -e DISPLAY=unix$DISPLAY \
   -u root \
   -v /run/user/1000/pulse:/run/user/1000/pulse \
-  -v ./srsRAN_4G:/src \
-  lte-sib-parser-main-worker
+  lte-sib-parser-worker
