@@ -5,13 +5,12 @@ show_help () {
   -h      show this help message
   -d      device name (UHD,soapy,bladeRF)
   -a      device args (example: "rxant=LNAW")
-  -a      rx gain
-          (default: 30)
+  -g      rx gain (default: 30)
   -b      lte band
   -s      start earfcn
   -e      end earfcn
   -q      use explict list of earfcn's (avoid cell_search)
-          example: -q \"1301 3300 525 3648\"
+          example: -q \"1300 1301 1302 1303\"
   -n      no reqursive scan, do no scan cells from sib5
   -t      srsue sib parsing timeout
           (default: 30)
