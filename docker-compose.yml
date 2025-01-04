@@ -1,53 +1,25 @@
 version: "3"
 services:
-  db:
-    image: postgres:15-alpine
-    restart: unless-stopped
-    volumes:
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-      - ./postgres_data:/var/lib/postgresql
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=db
-      - DB_HOST=db
-      - DB_PORT=5432
-    ports:
-        - "127.0.0.1:5432:5432"
-
-  app:
-    build: app/
-    restart: always
-    ports:
-      - 1337:1337
-    depends_on:
-      - db
-    links:
-      - db
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=db
-      - DB_HOST=db
-      - DB_PORT=5432
-
   worker:
     build: ./worker/
     stdin_open: true
-    tty: true
     privileged: true
-    environment:
-      - CELL_SEARCH=/srsRAN/build/lib/examples/cell_search
-      - SRSUE=/srsRAN/build/srsue/src/srsue
-      - SRSUECFG=/mnt/srsue/ue.conf
-      - SRSUELOG=/mnt/srsue/ue.log # write to volume is too slow
-      - DEVICE_ARGS=rxant=LNAW
-      - RX_GAIN=40
-      - API=app
-      - TIMEOUT=60
+    cap_add:
+      - SYS_NICE
     devices:
       - "/dev/bus"
     volumes:
       - /dev/serial:/dev/serial:ro
       - /dev/bus/usb:/dev/bus/usb:ro
-      - ./srsue:/mnt/srsue
+      - ./vol:/vol
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+      nice:
+        soft: 0
+        hard: 0
+      memlock:
+        soft: -1
+        hard: -1
+    restart: 'no'

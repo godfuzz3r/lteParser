@@ -1,5 +1,3 @@
-app/venv/
-app/__pycache__/
-postgres_data/
-worker/analyze.py
-srsue/ue.log
+srsRAN_4G/
+vol/output/*
+.vscode

@@ -2,13 +2,27 @@ FROM ubuntu:focal
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+RUN apt update && apt install -y software-properties-common
+
+# UHD drivers for USRP
+RUN add-apt-repository -y ppa:ettusresearch/uhd && \
+    add-apt-repository -y ppa:nuandllc/bladerf && \
+    add-apt-repository -y ppa:myriadrf/drivers && \
+    apt update && \
+    apt install -y \
+    bladerf libbladerf-dev \
+    libuhd-dev libuhd4.7.0 uhd-host
+
+ENV UHD_IMAGES_DIR=/usr/share/uhd/images/
+
 # Install updates and dependencies
-RUN apt-get update && \
-    apt-get -y install cmake libfftw3-dev libmbedtls-dev libboost-program-options-dev libconfig++-dev libsctp-dev git \
+RUN apt -y install cmake libfftw3-dev libmbedtls-dev libboost-program-options-dev libconfig++-dev libsctp-dev git \
     libzmq3-dev libboost-system-dev libboost-test-dev libboost-thread-dev libqwt-qt5-dev qtbase5-dev \
     software-properties-common g++ make pkg-config libpython2-dev python-numpy swig libi2c-dev \
     libboost-program-options-dev libconfig++-dev net-tools iputils-ping libusb-1.0-0-dev libpython3-dev python3-numpy swig \
-    python3-distutils jq curl extrace
+    python3-distutils jq curl extrace python3-pip vim
+
+RUN pip3 install tailer
 
 # Get SoapySDR, compile and install
 RUN git clone https://github.com/pothosware/SoapySDR.git && \
@@ -26,33 +40,31 @@ RUN git clone https://github.com/myriadrf/LimeSuite.git && \
     cmake ../ && make && make install && \
     ldconfig
 
-# UHD drivers for USRP
-RUN add-apt-repository ppa:ettusresearch/uhd && \
-    apt update && apt -y install libuhd-dev libuhd4.3.0 uhd-host && \
-    uhd_images_downloader
-
-
-# Get srsLTE, compile and install
-RUN git clone https://github.com/srsran/srsRAN.git
-
-COPY cellscan.patch /srsRAN
-
-WORKDIR /srsRAN
-
-RUN git checkout tags/release_22_04_1 && git apply cellscan.patch
-
-RUN mkdir build && cd build && \
-    cmake ../ && make -j`nproc` cell_search srsue && make install && \
+RUN git clone https://github.com/pothosware/SoapyBladeRF.git && \
+    cd SoapyBladeRF && \
+    mkdir build && cd build && \
+    cmake .. && make && make install && \
     ldconfig
 
-WORKDIR /
+# Get srsLTE, compile and install
+RUN git clone https://github.com/srsran/srsRAN_4G
 
-ENV UHD_IMAGES_DIR=/usr/share/uhd/images/
+#COPY ./srsRAN_4G /srsRAN_4G
 
-RUN apt install -y python3-pip
+COPY sib_logger.patch /srsRAN_4G
 
-RUN pip3 install tailer
+WORKDIR /srsRAN_4G/
 
-COPY worker.sh parse_sib.py ./
+# origin/master at 2024.12.25
+RUN git checkout ec29b0c1ff79cebcbe66caa6d6b90778261c42b8 && git apply sib_logger.patch && \
+    mkdir build && cd build && \
+    cmake -DUSE_LTE_RATES=ON ../ && make -j`nproc` cell_search srsue && make install && \
+    ldconfig
 
-ENTRYPOINT ["./worker.sh"]
+RUN cp /srsRAN_4G/build/lib/examples/cell_search /usr/bin/
+
+RUN mkdir /vol/
+
+WORKDIR /vol
+
+ENTRYPOINT ["bash"]

@@ -1,0 +1,4113 @@
+diff --git a/lib/examples/cell_search.c b/lib/examples/cell_search.c
+index 68b49d4b0..6ffa8d2d7 100644
+--- a/lib/examples/cell_search.c
++++ b/lib/examples/cell_search.c
+@@ -61,7 +61,6 @@ struct cells {
+   int           dl_earfcn;
+   float         power;
+ };
+-struct cells results[1024];
+ 
+ float rf_gain = 70.0;
+ char* rf_args = "";
+@@ -149,7 +148,6 @@ int main(int argc, char** argv)
+   int                           nof_freqs;
+   srsran_earfcn_t               channels[MAX_EARFCN];
+   uint32_t                      freq;
+-  uint32_t                      n_found_cells = 0;
+ 
+   srsran_debug_handle_crash(argc, argv);
+ 
+@@ -239,32 +237,17 @@ int main(int argc, char** argv)
+             ERROR("Error decoding MIB");
+             exit(-1);
+           }
+-          if (ret == SRSRAN_UE_MIB_FOUND) {
+-            printf("Found CELL ID %d. %d PRB, %d ports\n", cell.id, cell.nof_prb, cell.nof_ports);
+-            if (cell.nof_ports > 0) {
+-              results[n_found_cells].cell      = cell;
+-              results[n_found_cells].freq      = channels[freq].fd;
+-              results[n_found_cells].dl_earfcn = channels[freq].id;
+-              results[n_found_cells].power     = found_cells[i].peak;
+-              n_found_cells++;
+-            }
++          if (ret == SRSRAN_UE_MIB_FOUND){
++            printf("Found CELL ID %d. %d PRB, %d ports, EARFCN %d\n", cell.id, cell.nof_prb, cell.nof_ports, channels[freq].id);
++            srsran_ue_cellsearch_free(&cs);
++            srsran_rf_close(&rf);
++            exit(0);
+           }
+         }
+       }
+     }
+   }
+ 
+-  printf("\n\nFound %d cells\n", n_found_cells);
+-  for (int i = 0; i < n_found_cells; i++) {
+-    printf("Found CELL %.1f MHz, EARFCN=%d, PHYID=%d, %d PRB, %d ports, PSS power=%.1f dBm\n",
+-           results[i].freq,
+-           results[i].dl_earfcn,
+-           results[i].cell.id,
+-           results[i].cell.nof_prb,
+-           results[i].cell.nof_ports,
+-           srsran_convert_power_to_dB(results[i].power));
+-  }
+-
+   printf("\nBye\n");
+ 
+   srsran_ue_cellsearch_free(&cs);
+diff --git a/lib/include/srsran/adt/fsm.h b/lib/include/srsran/adt/fsm.h
+index ba1add556..ba9f25aee 100644
+--- a/lib/include/srsran/adt/fsm.h
++++ b/lib/include/srsran/adt/fsm.h
+@@ -226,22 +226,26 @@ struct apply_first_guard_pass<FSM, type_list<First, Rows...> > {
+   {
+     using src_state  = SrcState;
+     using dest_state = typename First::dest_state_t;
+-    using event_type = typename First::event_t;
++    //using event_type = typename First::event_t;
+ 
+     bool triggered = First::react(f, s, ev);
+     if (triggered) {
+       // Log Transition
+       if (std::is_same<src_state, dest_state>::value) {
++        /*
+         otherfsmInfo(static_cast<typename FSM::derived_t*>(f),
+                      "Event \"%s\" triggered state \"%s\" update",
+                      get_type_name<event_type>().c_str(),
+                      get_type_name<src_state>().c_str());
++        */
+       } else {
++        /*
+         otherfsmInfo(static_cast<typename FSM::derived_t*>(f),
+                      "transition detected - %s -> %s (cause: %s)",
+                      get_type_name<src_state>().c_str(),
+                      get_type_name<dest_state>().c_str(),
+                      get_type_name<event_type>().c_str());
++        */
+         // Apply state change operations
+         state_traits<FSM, src_state>::template transit_state<dest_state>(f, ev);
+       }
+diff --git a/lib/include/srsran/common/common_helper.h b/lib/include/srsran/common/common_helper.h
+index 670a60098..83cd3ff4b 100644
+--- a/lib/include/srsran/common/common_helper.h
++++ b/lib/include/srsran/common/common_helper.h
+@@ -42,7 +42,7 @@ inline void log_args(int argc, char* argv[], const std::string& service)
+     s1 << argv[i] << " ";
+   }
+ 
+-  srslog::fetch_basic_logger(service, false).set_level(srslog::basic_levels::info);
++  srslog::fetch_basic_logger(service, false).set_level(srslog::basic_levels::debug);
+   srslog::fetch_basic_logger(service).info("%s", s1.str().c_str());
+ }
+ 
+diff --git a/srsue/hdr/phy/ta_control.h b/srsue/hdr/phy/ta_control.h
+index 25a003cad..15591ed35 100644
+--- a/srsue/hdr/phy/ta_control.h
++++ b/srsue/hdr/phy/ta_control.h
+@@ -80,7 +80,7 @@ public:
+     // Reset speed data
+     reset_speed_data();
+ 
+-    logger.info("PHY:   Set TA base: n_ta: %d, ta_usec: %.1f", next_base_nta, next_base_sec * 1e6f);
++    //logger.info("PHY:   Set TA base: n_ta: %d, ta_usec: %.1f", next_base_nta, next_base_sec * 1e6f);
+   }
+ 
+   /**
+@@ -98,10 +98,10 @@ public:
+     // Update base in nta
+     next_base_nta = static_cast<uint32_t>(roundf(next_base_sec / SRSRAN_LTE_TS));
+ 
+-    logger.info("PHY:   Set TA: ta_delta_usec: %.1f, n_ta: %d, ta_usec: %.1f",
++    /*logger.info("PHY:   Set TA: ta_delta_usec: %.1f, n_ta: %d, ta_usec: %.1f",
+                 ta_delta_sec * 1e6f,
+                 next_base_nta,
+-                next_base_sec * 1e6f);
++                next_base_sec * 1e6f);*/
+   }
+ 
+   void add_ta_offset(uint32_t ta_offset)
+diff --git a/srsue/src/main.cc b/srsue/src/main.cc
+index c60584d90..fba0f8722 100644
+--- a/srsue/src/main.cc
++++ b/srsue/src/main.cc
+@@ -757,7 +757,7 @@ int main(int argc, char* argv[])
+   srslog::init();
+ 
+   srslog::fetch_basic_logger("ALL").set_level(srslog::basic_levels::warning);
+-  srsran::log_args(argc, argv, "UE");
++  //srsran::log_args(argc, argv, "UE");
+ 
+   srsran::check_scaling_governor(args.rf.device_name);
+ 
+diff --git a/srsue/src/phy/lte/cc_worker.cc b/srsue/src/phy/lte/cc_worker.cc
+index 5f656d8cf..5669a1965 100644
+--- a/srsue/src/phy/lte/cc_worker.cc
++++ b/srsue/src/phy/lte/cc_worker.cc
+@@ -29,10 +29,10 @@
+   logger.error(fmt, ##__VA_ARGS__)
+ #define Warning(fmt, ...)                                                                                              \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  logger.warning(fmt, ##__VA_ARGS__)
++  logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...)                                                                                                 \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  logger.info(fmt, ##__VA_ARGS__)
++  logger.debug(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...)                                                                                                \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+   logger.debug(fmt, ##__VA_ARGS__)
+@@ -220,7 +220,7 @@ bool cc_worker::work_dl_regular()
+   bool found_dl_grant = false;
+ 
+   if (!cell_initiated) {
+-    logger.warning("Trying to access cc_worker=%d while cell not initialized (DL)", cc_idx);
++    logger.debug("Trying to access cc_worker=%d while cell not initialized (DL)", cc_idx);
+     return false;
+   }
+ 
+@@ -323,7 +323,7 @@ bool cc_worker::work_dl_mbsfn(srsran_mbsfn_cfg_t mbsfn_cfg)
+   mac_interface_phy_lte::tb_action_dl_t dl_action = {};
+ 
+   if (!cell_initiated) {
+-    logger.warning("Trying to access cc_worker=%d while cell not initialized (MBSFN)", cc_idx);
++    logger.debug("Trying to access cc_worker=%d while cell not initialized (MBSFN)", cc_idx);
+     return false;
+   }
+ 
+@@ -429,10 +429,10 @@ int cc_worker::decode_pdcch_dl()
+       phy->set_dl_pending_grant(CURRENT_TTI, dci[k].cif_present ? dci[k].cif : cc_idx, cc_idx, &dci[k]);
+ 
+       // Logging
+-      if (logger.info.enabled()) {
++      if (logger.debug.enabled()) {
+         char str[512];
+         srsran_dci_dl_info(&dci[k], str, 512);
+-        logger.info("PDCCH: cc=%d, %s, snr=%.1f dB", cc_idx, str, ue_dl.chest_res.snr_db);
++        logger.debug("PDCCH: cc=%d, %s, snr=%.1f dB", cc_idx, str, ue_dl.chest_res.snr_db);
+       }
+     }
+   }
+@@ -505,10 +505,10 @@ int cc_worker::decode_pdsch(srsran_pdsch_ack_resource_t            ack_resource,
+     phy->set_dl_metrics(cc_idx, dl_metrics);
+ 
+     // Logging
+-    if (logger.info.enabled()) {
++    if (logger.debug.enabled()) {
+       char str[512];
+       srsran_pdsch_rx_info(&ue_dl_cfg.cfg.pdsch, pdsch_dec, str, 512);
+-      logger.info("PDSCH: cc=%d, %s, snr=%.1f dB", cc_idx, str, ue_dl.chest_res.snr_db);
++      logger.debug("PDSCH: cc=%d, %s, snr=%.1f dB", cc_idx, str, ue_dl.chest_res.snr_db);
+     }
+   }
+ 
+@@ -607,7 +607,7 @@ bool cc_worker::work_ul(srsran_uci_data_t* uci_data)
+   uint32_t                              pid          = 0;
+ 
+   if (!cell_initiated) {
+-    logger.warning("Trying to access cc_worker=%d while cell not initialized (UL)", cc_idx);
++    logger.debug("Trying to access cc_worker=%d while cell not initialized (UL)", cc_idx);
+     return false;
+   }
+ 
+@@ -635,7 +635,7 @@ bool cc_worker::work_ul(srsran_uci_data_t* uci_data)
+ 
+     // Generate PHY grant
+     if (srsran_ue_ul_dci_to_pusch_grant(&ue_ul, &sf_cfg_ul, &ue_ul_cfg, &dci_ul, &ue_ul_cfg.ul_cfg.pusch.grant)) {
+-      if (logger.info.enabled()) {
++      if (logger.debug.enabled()) {
+         char str[128];
+         srsran_dci_ul_info(&dci_ul, str, sizeof(str));
+         Info("Converting DCI message to UL grant %s", str);
+@@ -744,10 +744,10 @@ int cc_worker::decode_pdcch_ul()
+       phy->set_ul_pending_grant(&sf_cfg_dl, cc_idx_grant, &dci[k]);
+ 
+       // Logging
+-      if (logger.info.enabled()) {
++      if (logger.debug.enabled()) {
+         char str[512];
+         srsran_dci_ul_info(&dci[k], str, 512);
+-        logger.info("PDCCH: cc=%d, %s, snr=%.1f dB", cc_idx_grant, str, ue_dl.chest_res.snr_db);
++        logger.debug("PDCCH: cc=%d, %s, snr=%.1f dB", cc_idx_grant, str, ue_dl.chest_res.snr_db);
+       }
+     }
+   }
+@@ -805,10 +805,10 @@ bool cc_worker::encode_uplink(mac_interface_phy_lte::tb_action_ul_t* action, srs
+   }
+ 
+   // Logging
+-  if (logger.info.enabled()) {
++  if (logger.debug.enabled()) {
+     char str[512];
+     if (srsran_ue_ul_info(&ue_ul_cfg, &sf_cfg_ul, &data.uci, str, 512)) {
+-      logger.info("%s", str);
++      logger.debug("%s", str);
+     }
+   }
+ 
+diff --git a/srsue/src/phy/lte/sf_worker.cc b/srsue/src/phy/lte/sf_worker.cc
+index c09e42286..f4e361cad 100644
+--- a/srsue/src/phy/lte/sf_worker.cc
++++ b/srsue/src/phy/lte/sf_worker.cc
+@@ -30,10 +30,10 @@
+   logger.error(fmt, ##__VA_ARGS__)
+ #define Warning(fmt, ...)                                                                                              \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  logger.warning(fmt, ##__VA_ARGS__)
++  logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...)                                                                                                 \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  logger.info(fmt, ##__VA_ARGS__)
++  logger.debug(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...)                                                                                                \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+   logger.debug(fmt, ##__VA_ARGS__)
+diff --git a/srsue/src/phy/nr/cc_worker.cc b/srsue/src/phy/nr/cc_worker.cc
+index 46e059054..af42d12b2 100644
+--- a/srsue/src/phy/nr/cc_worker.cc
++++ b/srsue/src/phy/nr/cc_worker.cc
+@@ -160,10 +160,10 @@ void cc_worker::decode_pdcch_dl()
+   // Iterate over all received grants
+   for (int i = 0; i < n_dl; i++) {
+     // Log found DCI
+-    if (logger.info.enabled()) {
++    if (logger.debug.enabled()) {
+       std::array<char, 512> str;
+       srsran_dci_dl_nr_to_str(&ue_dl.dci, &dci_rx[i], str.data(), str.size());
+-      logger.info("PDCCH: cc=%d, %s", cc_idx, str.data());
++      logger.debug("PDCCH: cc=%d, %s", cc_idx, str.data());
+     }
+ 
+     if (logger.debug.enabled()) {
+@@ -171,7 +171,7 @@ void cc_worker::decode_pdcch_dl()
+       srsran_coreset_t*     coreset = &ue_dl.cfg.coreset[dci_rx[i].ctx.coreset_id];
+       std::array<char, 512> coreset_str;
+       srsran_coreset_to_str(coreset, coreset_str.data(), coreset_str.size());
+-      logger.info("PDCCH: coreset=%d, %s", cc_idx, coreset_str.data());
++      logger.debug("PDCCH: coreset=%d, %s", cc_idx, coreset_str.data());
+     }
+ 
+     // Enqueue UL grants
+@@ -215,10 +215,10 @@ void cc_worker::decode_pdcch_ul()
+   // Iterate over all received grants
+   for (int i = 0; i < n_ul; i++) {
+     // Log found DCI
+-    if (logger.info.enabled()) {
++    if (logger.debug.enabled()) {
+       std::array<char, 512> str;
+       srsran_dci_ul_nr_to_str(&ue_dl.dci, &dci_rx[i], str.data(), str.size());
+-      logger.info("PDCCH: cc=%d, %s", cc_idx, str.data());
++      logger.debug("PDCCH: cc=%d, %s", cc_idx, str.data());
+     }
+ 
+     // Enqueue UL grants
+@@ -259,7 +259,7 @@ bool cc_worker::decode_pdsch_dl()
+       phy.set_pending_ack(dl_slot_cfg.idx, ack_resource, true);
+     }
+ 
+-    logger.info("Decoding not required. Skipping PDSCH. ack_tti_tx=%d", TTI_ADD(dl_slot_cfg.idx, ack_resource.k1));
++    logger.debug("Decoding not required. Skipping PDSCH. ack_tti_tx=%d", TTI_ADD(dl_slot_cfg.idx, ack_resource.k1));
+     return true;
+   }
+ 
+@@ -283,14 +283,14 @@ bool cc_worker::decode_pdsch_dl()
+   }
+ 
+   // Logging
+-  if (logger.info.enabled()) {
++  if (logger.debug.enabled()) {
+     str_info_t str;
+     srsran_ue_dl_nr_pdsch_info(&ue_dl, &pdsch_cfg, &pdsch_res, str.data(), (uint32_t)str.size());
+ 
+     if (logger.debug.enabled()) {
+       str_extra_t str_extra;
+       srsran_sch_cfg_nr_info(&pdsch_cfg, str_extra.data(), (uint32_t)str_extra.size());
+-      logger.info(pdsch_res.tb[0].payload,
++      logger.debug(pdsch_res.tb[0].payload,
+                   pdsch_cfg.grant.tb[0].tbs / 8,
+                   "PDSCH: cc=%d pid=%d %s cfo=%.1f\n%s",
+                   cc_idx,
+@@ -299,7 +299,7 @@ bool cc_worker::decode_pdsch_dl()
+                   ue_dl.chest.cfo,
+                   str_extra.data());
+     } else {
+-      logger.info(pdsch_res.tb[0].payload,
++      logger.debug(pdsch_res.tb[0].payload,
+                   pdsch_res.tb[0].crc ? pdsch_cfg.grant.tb[0].tbs / 8 : 0,
+                   "PDSCH: cc=%d pid=%d %s ack_tti_tx=%d",
+                   cc_idx,
+@@ -323,7 +323,7 @@ bool cc_worker::decode_pdsch_dl()
+ 
+       str_extra_t str_extra;
+       srsran_sch_cfg_nr_info(&pdsch_cfg, str_extra.data(), (uint32_t)str_extra.size());
+-      logger.info("PDSCH: KO detected, dumping PDSCH baseband samples into file '%s'"
++      logger.debug("PDSCH: KO detected, dumping PDSCH baseband samples into file '%s'"
+                   "\n"
+                   "Information: cc_idx=%d pid=%d slot_idx=%d sf_len=%d\n%s",
+                   srsran::to_c_str(filename),
+@@ -421,7 +421,7 @@ bool cc_worker::measure_csi()
+         }
+       } else {
+         // CRC shall never fail if the UE is in sync
+-        logger.warning("PBCH-MIB: CRC failed");
++        logger.debug("PBCH-MIB: CRC failed");
+       }
+ 
+       // Report SSB candidate channel measurement to the PHY state
+@@ -573,7 +573,7 @@ bool cc_worker::work_ul()
+     // Check if there is any pending ACK for this DL slot...
+     if (pdsch_ack.nof_cc > 1) {
+       // ... in this case log a warning to inform about miss-configuration
+-      logger.warning("Detected HARQ feedback on DL slot");
++      logger.debug("Detected HARQ feedback on DL slot");
+     }
+ 
+     return true;
+@@ -651,14 +651,14 @@ bool cc_worker::work_ul()
+     }
+ 
+     // PUSCH Logging
+-    if (logger.info.enabled()) {
++    if (logger.debug.enabled()) {
+       str_info_t str;
+       srsran_ue_ul_nr_pusch_info(&ue_ul, &pusch_cfg, &data.uci, str.data(), str.size());
+ 
+       if (logger.debug.enabled()) {
+         str_extra_t str_extra;
+         srsran_sch_cfg_nr_info(&pusch_cfg, str_extra.data(), (uint32_t)str_extra.size());
+-        logger.info(ul_action.tb.payload->msg,
++        logger.debug(ul_action.tb.payload->msg,
+                     pusch_cfg.grant.tb[0].tbs / 8,
+                     "PUSCH: cc=%d pid=%d %s tti_tx=%d\n%s",
+                     cc_idx,
+@@ -667,7 +667,7 @@ bool cc_worker::work_ul()
+                     ul_slot_cfg.idx,
+                     str_extra.data());
+       } else {
+-        logger.info(ul_action.tb.payload->msg,
++        logger.debug(ul_action.tb.payload->msg,
+                     pusch_cfg.grant.tb[0].tbs / 8,
+                     "PUSCH: cc=%d pid=%d %s tti_tx=%d",
+                     cc_idx,
+@@ -698,10 +698,10 @@ bool cc_worker::work_ul()
+     }
+ 
+     // PUCCH Logging
+-    if (logger.info.enabled()) {
++    if (logger.debug.enabled()) {
+       std::array<char, 512> str;
+       srsran_ue_ul_nr_pucch_info(&resource, &uci_data, str.data(), str.size());
+-      logger.info("PUCCH: cc=%d, %s, tti_tx=%d", cc_idx, str.data(), ul_slot_cfg.idx);
++      logger.debug("PUCCH: cc=%d, %s, tti_tx=%d", cc_idx, str.data(), ul_slot_cfg.idx);
+     }
+   } else {
+     // No NR signal shall be transmitted
+diff --git a/srsue/src/phy/nr/cell_search.cc b/srsue/src/phy/nr/cell_search.cc
+index dc1ef5452..72f1c47ba 100644
+--- a/srsue/src/phy/nr/cell_search.cc
++++ b/srsue/src/phy/nr/cell_search.cc
+@@ -64,10 +64,10 @@ bool cell_search::start(const cfg_t& cfg)
+   ssb_cfg.duplex_mode      = cfg.duplex_mode;
+ 
+   // Print SSB configuration, helps debugging gNb and UE
+-  if (logger.info.enabled()) {
++  if (logger.debug.enabled()) {
+     std::array<char, 512> ssb_cfg_str = {};
+     srsran_ssb_cfg_to_str(&ssb_cfg, ssb_cfg_str.data(), (uint32_t)ssb_cfg_str.size());
+-    logger.info("Cell search: Setting SSB configuration %s", ssb_cfg_str.data());
++    logger.debug("Cell search: Setting SSB configuration %s", ssb_cfg_str.data());
+   }
+ 
+   // Configure SSB
+diff --git a/srsue/src/phy/nr/slot_sync.cc b/srsue/src/phy/nr/slot_sync.cc
+index 302822358..62b2edb7b 100644
+--- a/srsue/src/phy/nr/slot_sync.cc
++++ b/srsue/src/phy/nr/slot_sync.cc
+@@ -72,10 +72,10 @@ bool slot_sync::init(const args_t& args, stack_interface_phy_nr* stack_, srsran:
+ int slot_sync::set_sync_cfg(const srsran_ue_sync_nr_cfg_t& cfg)
+ {
+   // Print the configuration, it is essential to make sure the UE synchronizes with the wight cell
+-  if (logger.info.enabled()) {
++  if (logger.debug.enabled()) {
+     std::array<char, 512> ssb_cfg_str = {};
+     srsran_ssb_cfg_to_str(&cfg.ssb, ssb_cfg_str.data(), (uint32_t)ssb_cfg_str.size());
+-    logger.info("SYNC: Setting SSB configuration %s Tracking N_id=%d.", ssb_cfg_str.data(), cfg.N_id);
++    logger.debug("SYNC: Setting SSB configuration %s Tracking N_id=%d.", ssb_cfg_str.data(), cfg.N_id);
+   }
+ 
+   // Set the synchronization configuration
+@@ -163,7 +163,7 @@ void slot_sync::run_stack_tti()
+   if (forced_rx_time_init || srsran_timestamp_iszero(&stack_tti_ts) ||
+       srsran_timestamp_compare(&stack_tti_ts_new, &stack_tti_ts) < 0) {
+     if (srsran_timestamp_compare(&stack_tti_ts_new, &stack_tti_ts) < 0) {
+-      logger.warning("SYNC:  radio time seems to be going backwards (rx_time=%f, tti_ts=%f)",
++      logger.debug("SYNC:  radio time seems to be going backwards (rx_time=%f, tti_ts=%f)",
+                      srsran_timestamp_real(&stack_tti_ts_new),
+                      srsran_timestamp_real(&stack_tti_ts));
+       // time-stamp will be set to rx time below and run_tti() will be called with MIN_TTI_JUMP
+@@ -183,7 +183,7 @@ void slot_sync::run_stack_tti()
+     int32_t tti_jump = static_cast<int32_t>(srsran_timestamp_uint64(&temp, 1e3));
+     tti_jump         = SRSRAN_MAX(tti_jump, MIN_TTI_JUMP);
+     if (tti_jump > MAX_TTI_JUMP) {
+-      logger.warning("SYNC:  TTI jump of %d limited to %d", tti_jump, int(MAX_TTI_JUMP));
++      logger.debug("SYNC:  TTI jump of %d limited to %d", tti_jump, int(MAX_TTI_JUMP));
+       tti_jump = SRSRAN_MIN(tti_jump, MAX_TTI_JUMP);
+     }
+ 
+diff --git a/srsue/src/phy/nr/worker_pool.cc b/srsue/src/phy/nr/worker_pool.cc
+index 107f6667d..15a01c486 100644
+--- a/srsue/src/phy/nr/worker_pool.cc
++++ b/srsue/src/phy/nr/worker_pool.cc
+@@ -188,12 +188,12 @@ int worker_pool::set_rar_grant(uint32_t                                       ra
+   srsran_slot_cfg_t msg3_slot_cfg = {};
+   msg3_slot_cfg.idx               = rar_slot_idx;
+ 
+-  if (logger.info.enabled()) {
++  if (logger.debug.enabled()) {
+     std::array<char, 512> str;
+     srsran_dci_nr_t       dci = {};
+     srsran_dci_ul_nr_to_str(&dci, &dci_ul, str.data(), str.size());
+     logger.set_context(msg3_slot_cfg.idx);
+-    logger.info("Setting RAR Grant: %s", str.data());
++    logger.debug("Setting RAR Grant: %s", str.data());
+   }
+ 
+   std::lock_guard<std::mutex> lock(cfg_mutex);
+@@ -249,7 +249,7 @@ bool worker_pool::set_config(const srsran::phy_cfg_nr_t& new_cfg)
+     }
+   }
+ 
+-  logger.info("Setting new PHY configuration ARFCN=%d, PCI=%d", dl_arfcn, new_cfg.carrier.pci);
++  logger.debug("Setting new PHY configuration ARFCN=%d, PCI=%d", dl_arfcn, new_cfg.carrier.pci);
+ 
+   // Set carrier information
+   info_metrics_t info = {};
+diff --git a/srsue/src/phy/phy.cc b/srsue/src/phy/phy.cc
+index 44ed90384..6ea8f0e26 100644
+--- a/srsue/src/phy/phy.cc
++++ b/srsue/src/phy/phy.cc
+@@ -417,7 +417,7 @@ void phy::radio_failure()
+ 
+ void phy::reset()
+ {
+-  Info("Resetting PHY...");
++  //Info("Resetting PHY...");
+   common.ta.set_base_sec(0);
+   common.reset();
+ 
+diff --git a/srsue/src/phy/phy_common.cc b/srsue/src/phy/phy_common.cc
+index 88f290732..daad98b10 100644
+--- a/srsue/src/phy/phy_common.cc
++++ b/srsue/src/phy/phy_common.cc
+@@ -33,7 +33,7 @@
+   logger.warning(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...)                                                                                                 \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  logger.info(fmt, ##__VA_ARGS__)
++  logger.debug(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...)                                                                                                \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+   logger.debug(fmt, ##__VA_ARGS__)
+@@ -804,6 +804,8 @@ void phy_common::update_measurements(uint32_t                     cc_idx,
+     if (cc_idx == 0) {
+       if (avg_rsrp_dbm[0] > args->in_sync_rsrp_dbm_th && avg_snr_db[0] > args->in_sync_snr_db_th) {
+         logger.debug("SNR=%.1f dB, RSRP=%.1f dBm sync=in-sync from channel estimator", avg_snr_db[0], avg_rsrp_dbm[0]);
++        logger.info("\t[powermeasure]\t[{\"rsrp\":%.1f}]", avg_rsrp_dbm[0]);
++        logger.set_level(srslog::basic_levels::none);
+       } else {
+         logger.warning(
+             "SNR=%.1f dB RSRP=%.1f dBm, sync=out-of-sync from channel estimator", avg_snr_db[0], avg_rsrp_dbm[0]);
+diff --git a/srsue/src/phy/phy_nr_sa.cc b/srsue/src/phy/phy_nr_sa.cc
+index aa6baacbb..6fc97e888 100644
+--- a/srsue/src/phy/phy_nr_sa.cc
++++ b/srsue/src/phy/phy_nr_sa.cc
+@@ -170,7 +170,7 @@ bool phy_nr_sa::start_cell_search(const cell_search_args_t& req)
+   // TODO: verify arguments are valid before starting procedure
+ 
+   cmd_worker_cell.add_cmd([this, req]() {
+-    logger.info("Cell Search: Going to IDLE");
++    logger.debug("Cell Search: Going to IDLE");
+     sync.cell_go_idle();
+ 
+     // Prepare cell search configuration from the request
+@@ -208,7 +208,7 @@ bool phy_nr_sa::start_cell_select(const cell_select_args_t& req)
+ {
+   // TODO: verify arguments are valid before starting procedure
+ 
+-  logger.info("Cell Select: Going to IDLE");
++  logger.debug("Cell Select: Going to IDLE");
+   sync.cell_go_idle();
+ 
+   selected_cell = req.carrier;
+diff --git a/srsue/src/phy/prach.cc b/srsue/src/phy/prach.cc
+index e8f609840..961748d51 100644
+--- a/srsue/src/phy/prach.cc
++++ b/srsue/src/phy/prach.cc
+@@ -29,10 +29,10 @@
+   logger.error(fmt, ##__VA_ARGS__)
+ #define Warning(fmt, ...)                                                                                              \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  logger.warning(fmt, ##__VA_ARGS__)
++  logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...)                                                                                                 \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  logger.info(fmt, ##__VA_ARGS__)
++  logger.debug(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...)                                                                                                \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+   logger.debug(fmt, ##__VA_ARGS__)
+@@ -116,7 +116,7 @@ bool prach::set_cell(srsran_cell_t cell_, srsran_prach_cfg_t prach_cfg)
+   transmitted_tti = -1;
+   cell_initiated  = true;
+ 
+-  logger.info("Finished setting new PRACH configuration.");
++  logger.debug("Finished setting new PRACH configuration.");
+ 
+   return true;
+ }
+diff --git a/srsue/src/phy/scell/intra_measure_base.cc b/srsue/src/phy/scell/intra_measure_base.cc
+index 78b33f396..d007dcd8d 100644
+--- a/srsue/src/phy/scell/intra_measure_base.cc
++++ b/srsue/src/phy/scell/intra_measure_base.cc
+@@ -103,7 +103,7 @@ void intra_measure_base::meas_stop()
+   // Transition state to idle
+   // Ring-buffer shall not be reset, it will automatically be reset as soon as the FSM transitions to receive
+   state.set_state(internal_state::idle);
+-  Log(info, "Disabled neighbour cell search");
++  //Log(info, "Disabled neighbour cell search");
+ }
+ 
+ void intra_measure_base::set_cells_to_meas(const std::set<uint32_t>& pci)
+diff --git a/srsue/src/phy/scell/intra_measure_nr.cc b/srsue/src/phy/scell/intra_measure_nr.cc
+index 2947d5aef..0b3d5d80d 100644
+--- a/srsue/src/phy/scell/intra_measure_nr.cc
++++ b/srsue/src/phy/scell/intra_measure_nr.cc
+@@ -115,7 +115,7 @@ bool intra_measure_nr::measure_rat(const measure_context_t& context, std::vector
+   bool valid = (meas.snr_dB >= thr_snr_db);
+ 
+   // Log finding
+-  if ((logger.info.enabled() and valid) or logger.debug.enabled()) {
++  if ((logger.debug.enabled() and valid) or logger.debug.enabled()) {
+     std::array<char, 512> str_info = {};
+     srsran_csi_rs_measure_info(&meas, str_info.data(), (uint32_t)str_info.size());
+     Log(info, "%s neighbour cell: PCI=%03d %s", valid ? "Found" : "Best", N_id, str_info.data());
+diff --git a/srsue/src/phy/search.cc b/srsue/src/phy/search.cc
+index 19d32cbd1..eca7cc197 100644
+--- a/srsue/src/phy/search.cc
++++ b/srsue/src/phy/search.cc
+@@ -27,10 +27,10 @@
+   logger.error(fmt, ##__VA_ARGS__)
+ #define Warning(fmt, ...)                                                                                              \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  logger.warning(fmt, ##__VA_ARGS__)
++  logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...)                                                                                                 \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  logger.info(fmt, ##__VA_ARGS__)
++  logger.debug(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...)                                                                                                \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+   logger.debug(fmt, ##__VA_ARGS__)
+diff --git a/srsue/src/phy/sfn_sync.cc b/srsue/src/phy/sfn_sync.cc
+index 0e1830688..d68b5fa3c 100644
+--- a/srsue/src/phy/sfn_sync.cc
++++ b/srsue/src/phy/sfn_sync.cc
+@@ -27,10 +27,10 @@
+   logger.error(fmt, ##__VA_ARGS__)
+ #define Warning(fmt, ...)                                                                                              \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  logger.warning(fmt, ##__VA_ARGS__)
++  logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...)                                                                                                 \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  logger.info(fmt, ##__VA_ARGS__)
++  logger.debug(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...)                                                                                                \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+   logger.debug(fmt, ##__VA_ARGS__)
+diff --git a/srsue/src/phy/sync.cc b/srsue/src/phy/sync.cc
+index c62aa6d5c..95df7bf25 100644
+--- a/srsue/src/phy/sync.cc
++++ b/srsue/src/phy/sync.cc
+@@ -33,10 +33,10 @@
+   phy_logger.error(fmt, ##__VA_ARGS__)
+ #define Warning(fmt, ...)                                                                                              \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  phy_logger.warning(fmt, ##__VA_ARGS__)
++  phy_logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...)                                                                                                 \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+-  phy_logger.info(fmt, ##__VA_ARGS__)
++  phy_logger.debug(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...)                                                                                                \
+   if (SRSRAN_DEBUG_ENABLED)                                                                                            \
+   phy_logger.debug(fmt, ##__VA_ARGS__)
+@@ -267,7 +267,7 @@ rrc_interface_phy_lte::cell_search_ret_t sync::cell_search_start(phy_cell_t* fou
+   // Check return state
+   switch (cell_search_ret) {
+     case search::CELL_FOUND:
+-      phy_logger.info("Cell Search: Found cell with PCI=%d with %d PRB", cell.get().id, cell.get().nof_prb);
++      phy_logger.debug("Cell Search: Found cell with PCI=%d with %d PRB", cell.get().id, cell.get().nof_prb);
+       if (found_cell) {
+         found_cell->earfcn = current_earfcn;
+         found_cell->pci    = cell.get().id;
+@@ -480,7 +480,7 @@ void sync::run_camping_in_sync_state(lte::sf_worker*      lte_worker,
+   if (is_overflow) {
+     force_camping_sfn_sync = true;
+     is_overflow            = false;
+-    phy_logger.info("Detected overflow, trying to resync SFN");
++    phy_logger.debug("Detected overflow, trying to resync SFN");
+   }
+ 
+   // Force decode MIB if required
+@@ -502,10 +502,10 @@ void sync::run_camping_in_sync_state(lte::sf_worker*      lte_worker,
+         srsran::console("Detected cell during SFN synchronization differs from configured cell. Cell "
+                         "reselection to cells with different MIB is not supported\n");
+       } else {
+-        phy_logger.info("SFN resynchronized successfully");
++        phy_logger.debug("SFN resynchronized successfully");
+       }
+     } else {
+-      phy_logger.warning("SFN not yet synchronized, sending out-of-sync");
++      phy_logger.debug("SFN not yet synchronized, sending out-of-sync");
+     }
+   }
+ 
+@@ -921,7 +921,7 @@ bool sync::set_frequency()
+     }
+   }
+   if (set_dl_freq > 0 && set_ul_freq > 0) {
+-    phy_logger.info(
++    phy_logger.debug(
+         "SYNC:  Set DL EARFCN=%d, f_dl=%.1f MHz, f_ul=%.1f MHz", current_earfcn, set_dl_freq / 1e6, set_ul_freq / 1e6);
+ 
+     // Logical channel is 0
+@@ -1027,7 +1027,7 @@ void sync::run_stack_tti()
+   if (forced_rx_time_init || srsran_timestamp_iszero(&stack_tti_ts) ||
+       srsran_timestamp_compare(&stack_tti_ts_new, &stack_tti_ts) < 0) {
+     if (srsran_timestamp_compare(&stack_tti_ts_new, &stack_tti_ts) < 0) {
+-      phy_logger.warning("SYNC:  radio time seems to be going backwards (rx_time=%f, tti_ts=%f)",
++      phy_logger.debug("SYNC:  radio time seems to be going backwards (rx_time=%f, tti_ts=%f)",
+                          srsran_timestamp_real(&stack_tti_ts_new),
+                          srsran_timestamp_real(&stack_tti_ts));
+       // time-stamp will be set to rx time below and run_tti() will be called with MIN_TTI_JUMP
+@@ -1047,7 +1047,7 @@ void sync::run_stack_tti()
+     int32_t tti_jump = static_cast<int32_t>(srsran_timestamp_uint64(&temp, 1e3));
+     tti_jump         = SRSRAN_MAX(tti_jump, MIN_TTI_JUMP);
+     if (tti_jump > MAX_TTI_JUMP) {
+-      phy_logger.warning("SYNC:  TTI jump of %d limited to %d", tti_jump, int(MAX_TTI_JUMP));
++      phy_logger.debug("SYNC:  TTI jump of %d limited to %d", tti_jump, int(MAX_TTI_JUMP));
+       tti_jump = SRSRAN_MIN(tti_jump, MAX_TTI_JUMP);
+     }
+ 
+diff --git a/srsue/src/phy/sync_sa.cc b/srsue/src/phy/sync_sa.cc
+index 5529aaf79..9d3fbfbaa 100644
+--- a/srsue/src/phy/sync_sa.cc
++++ b/srsue/src/phy/sync_sa.cc
+@@ -148,7 +148,7 @@ cell_search::ret_t sync_sa::cell_search_run(const cell_search::cfg_t& cfg)
+   rrc_proc_state = PROC_SEARCH_RUNNING;
+ 
+   // tune radio
+-  logger.info("Tuning Rx channel %d to %.2f MHz", 0, cfg.center_freq_hz / 1e6);
++  logger.debug("Tuning Rx channel %d to %.2f MHz", 0, cfg.center_freq_hz / 1e6);
+   radio->set_rx_freq(0, cfg.center_freq_hz);
+ 
+   if (not searcher.start(cfg)) {
+@@ -156,7 +156,7 @@ cell_search::ret_t sync_sa::cell_search_run(const cell_search::cfg_t& cfg)
+     return cs_ret;
+   }
+ 
+-  logger.info("Cell Search: Running Cell search state");
++  logger.debug("Cell Search: Running Cell search state");
+   cell_search_nof_trials = 0;
+   phy_state.run_cell_search();
+ 
+@@ -184,9 +184,9 @@ rrc_interface_phy_nr::cell_select_result_t sync_sa::cell_select_run(const phy_in
+   rrc_proc_state = PROC_SELECT_RUNNING;
+ 
+   // tune radio
+-  logger.info("Tuning Rx channel %d to %.2f MHz", 0, req.carrier.dl_center_frequency_hz / 1e6);
++  logger.debug("Tuning Rx channel %d to %.2f MHz", 0, req.carrier.dl_center_frequency_hz / 1e6);
+   radio->set_rx_freq(0, req.carrier.dl_center_frequency_hz);
+-  logger.info("Tuning Tx channel %d to %.2f MHz", 0, req.carrier.ul_center_frequency_hz / 1e6);
++  logger.debug("Tuning Tx channel %d to %.2f MHz", 0, req.carrier.ul_center_frequency_hz / 1e6);
+   radio->set_tx_freq(0, req.carrier.ul_center_frequency_hz);
+ 
+   // Configure cell
+@@ -206,10 +206,10 @@ rrc_interface_phy_nr::cell_select_result_t sync_sa::cell_select_run(const phy_in
+ 
+   // Determine if the procedure was successful if the current state is camping, otherwise it is unsuccessful
+   if (phy_state.is_camping()) {
+-    logger.info("Cell Select: SFN synchronized. CAMPING...");
++    logger.debug("Cell Select: SFN synchronized. CAMPING...");
+     result.status = rrc_interface_phy_nr::cell_select_result_t::SUCCESSFUL;
+   } else {
+-    logger.info("Cell Select: Could not synchronize SFN");
++    logger.debug("Cell Select: Could not synchronize SFN");
+     result.status = rrc_interface_phy_nr::cell_select_result_t::UNSUCCESSFUL;
+   }
+ 
+@@ -275,7 +275,7 @@ void sync_sa::run_state_sfn_sync()
+   if (slot_synchronizer.run_sfn_sync()) {
+     tti = slot_synchronizer.get_slot_cfg().idx;
+ 
+-    logger.info("SYNC: SFN synchronised successfully (SFN=%d). Transitioning to IDLE...",
++    logger.debug("SYNC: SFN synchronised successfully (SFN=%d). Transitioning to IDLE...",
+                 tti / SRSRAN_NSLOTS_PER_FRAME_NR(srsran_subcarrier_spacing_15kHz));
+ 
+     phy_state.state_exit(true);
+@@ -287,7 +287,7 @@ void sync_sa::run_state_sfn_sync()
+ 
+   // Abort SFN synchronization if the maximum number of trials is reached
+   if (sfn_sync_nof_trials >= sfn_sync_max_trials) {
+-    logger.info("SYNC: The SFN sync reached the maximum number of trials (%d). Transitioning to IDLE...",
++    logger.debug("SYNC: The SFN sync reached the maximum number of trials (%d). Transitioning to IDLE...",
+                 sfn_sync_nof_trials);
+     phy_state.state_exit(false);
+   }
+diff --git a/srsue/src/phy/test/nr_cell_search_rf.cc b/srsue/src/phy/test/nr_cell_search_rf.cc
+index d18db8612..269ff0eb8 100644
+--- a/srsue/src/phy/test/nr_cell_search_rf.cc
++++ b/srsue/src/phy/test/nr_cell_search_rf.cc
+@@ -243,7 +243,7 @@ int main(int argc, char** argv)
+           radio.set_rx_freq(0, center_freq_hz + args.freq_offset_hz);
+         }
+ 
+-        logger.info("Measuring SSB frequency %.2f MHz, center %.2f MHz", ssb_freq_hz / 1e6, center_freq_hz / 1e6);
++        logger.debug("Measuring SSB frequency %.2f MHz, center %.2f MHz", ssb_freq_hz / 1e6, center_freq_hz / 1e6);
+ 
+         // Setup measurement
+         srsue::scell::intra_measure_nr::config_t meas_cfg = {};
+diff --git a/srsue/src/phy/test/nr_cell_search_test.cc b/srsue/src/phy/test/nr_cell_search_test.cc
+index 8f21d1eeb..28ee452e1 100644
+--- a/srsue/src/phy/test/nr_cell_search_test.cc
++++ b/srsue/src/phy/test/nr_cell_search_test.cc
+@@ -517,7 +517,7 @@ int main(int argc, char** argv)
+     // Give data to intra measure component
+     intra_measure.run_tti(sf_idx % 10240, baseband_buffer.data(), sf_len);
+     if (sf_idx % 1000 == 0) {
+-      logger.info("Done %.1f%%", (double)sf_idx * 100.0 / ((double)args.duration_s * 1000.0));
++      logger.debug("Done %.1f%%", (double)sf_idx * 100.0 / ((double)args.duration_s * 1000.0));
+     }
+   }
+ 
+@@ -529,7 +529,7 @@ int main(int argc, char** argv)
+   // Stop, it will block until the asynchronous thread quits
+   intra_measure.stop();
+ 
+-  logger.warning("NR intra frequency performance %d Msps\n", intra_measure.get_perf());
++  logger.debug("NR intra frequency performance %d Msps\n", intra_measure.get_perf());
+ 
+   ret = rrc.print_stats(args) ? SRSRAN_SUCCESS : SRSRAN_ERROR;
+ 
+diff --git a/srsue/src/phy/test/ue_phy_test.cc b/srsue/src/phy/test/ue_phy_test.cc
+index 52d635e8a..99df6a3f7 100644
+--- a/srsue/src/phy/test/ue_phy_test.cc
++++ b/srsue/src/phy/test/ue_phy_test.cc
+@@ -96,7 +96,7 @@ private:
+     {
+       for (auto& m : meas) {
+         notify_new_phy_meas();
+-        logger.info("New measurement earfcn=%d; pci=%d; rsrp=%+.1fdBm; rsrq=%+.1fdB;", m.earfcn, m.pci, m.rsrp, m.rsrq);
++        logger.debug("New measurement earfcn=%d; pci=%d; rsrp=%+.1fdBm; rsrq=%+.1fdB;", m.earfcn, m.pci, m.rsrp, m.rsrq);
+       }
+     }
+     uint16_t get_dl_sched_rnti(uint32_t tti) override { return rnti; }
+@@ -296,43 +296,43 @@ private:
+     {
+       std::unique_lock<std::mutex> lock(mutex);
+       tx_freq = (float)freq;
+-      logger.info("Set Tx freq to %+.0f MHz.", freq * 1.0e-6);
++      logger.debug("Set Tx freq to %+.0f MHz.", freq * 1.0e-6);
+     }
+     void set_rx_freq(const uint32_t& channel_idx, const double& freq) override
+     {
+       std::unique_lock<std::mutex> lock(mutex);
+       rx_freq = (float)freq;
+-      logger.info("Set Rx freq to %+.0f MHz.", freq * 1.0e-6);
++      logger.debug("Set Rx freq to %+.0f MHz.", freq * 1.0e-6);
+     }
+     void set_rx_gain_th(const float& gain) override
+     {
+       std::unique_lock<std::mutex> lock(mutex);
+       rx_gain = srsran_convert_dB_to_amplitude(gain);
+-      logger.info("Set Rx gain-th to %+.1f dB (%.6f).", gain, rx_gain);
++      logger.debug("Set Rx gain-th to %+.1f dB (%.6f).", gain, rx_gain);
+     }
+     void set_tx_gain(const float& gain) override
+     {
+       std::unique_lock<std::mutex> lock(mutex);
+       rx_gain = srsran_convert_dB_to_amplitude(gain);
+-      logger.info("Set Tx gain to %+.1f dB (%.6f).", gain, rx_gain);
++      logger.debug("Set Tx gain to %+.1f dB (%.6f).", gain, rx_gain);
+     }
+     void set_rx_gain(const float& gain) override
+     {
+       std::unique_lock<std::mutex> lock(mutex);
+       rx_gain = srsran_convert_dB_to_amplitude(gain);
+-      logger.info("Set Rx gain to %+.1f dB (%.6f).", gain, rx_gain);
++      logger.debug("Set Rx gain to %+.1f dB (%.6f).", gain, rx_gain);
+     }
+     void set_tx_srate(const double& srate) override
+     {
+       std::unique_lock<std::mutex> lock(mutex);
+       tx_srate = (float)srate;
+-      logger.info("Set Tx sampling rate to %+.3f MHz.", srate * 1.0e-6);
++      logger.debug("Set Tx sampling rate to %+.3f MHz.", srate * 1.0e-6);
+     }
+     void set_rx_srate(const double& srate) override
+     {
+       std::unique_lock<std::mutex> lock(mutex);
+       rx_srate = (float)srate;
+-      logger.info("Set Rx sampling rate to %+.3f MHz.", srate * 1.0e-6);
++      logger.debug("Set Rx sampling rate to %+.3f MHz.", srate * 1.0e-6);
+     }
+     void  set_channel_rx_offset(uint32_t ch, int32_t offset_samples) override{};
+     float get_rx_gain() override
+diff --git a/srsue/src/stack/mac/demux.cc b/srsue/src/stack/mac/demux.cc
+index a0cd35ef4..6dbdccfbe 100644
+--- a/srsue/src/stack/mac/demux.cc
++++ b/srsue/src/stack/mac/demux.cc
+@@ -25,7 +25,7 @@
+ #include "srsran/interfaces/ue_phy_interfaces.h"
+ 
+ #define Error(fmt, ...) logger.error(fmt, ##__VA_ARGS__)
+-#define Warning(fmt, ...) logger.warning(fmt, ##__VA_ARGS__)
++#define Warning(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...) logger.info(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ 
+diff --git a/srsue/src/stack/mac/dl_harq.cc b/srsue/src/stack/mac/dl_harq.cc
+index beb978880..fc65c83d6 100644
+--- a/srsue/src/stack/mac/dl_harq.cc
++++ b/srsue/src/stack/mac/dl_harq.cc
+@@ -20,7 +20,7 @@
+  */
+ 
+ #define Error(fmt, ...) logger.error(fmt, ##__VA_ARGS__)
+-#define Warning(fmt, ...) logger.warning(fmt, ##__VA_ARGS__)
++#define Warning(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...) logger.info(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ 
+diff --git a/srsue/src/stack/mac/mac.cc b/srsue/src/stack/mac/mac.cc
+index 51c977d1e..a870bea0f 100644
+--- a/srsue/src/stack/mac/mac.cc
++++ b/srsue/src/stack/mac/mac.cc
+@@ -20,7 +20,7 @@
+  */
+ 
+ #define Error(fmt, ...) logger.error(fmt, ##__VA_ARGS__)
+-#define Warning(fmt, ...) logger.warning(fmt, ##__VA_ARGS__)
++#define Warning(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...) logger.info(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ 
+diff --git a/srsue/src/stack/mac/mux.cc b/srsue/src/stack/mac/mux.cc
+index aa131cc81..97c81e792 100644
+--- a/srsue/src/stack/mac/mux.cc
++++ b/srsue/src/stack/mac/mux.cc
+@@ -20,7 +20,7 @@
+  */
+ 
+ #define Error(fmt, ...) logger.error(fmt, ##__VA_ARGS__)
+-#define Warning(fmt, ...) logger.warning(fmt, ##__VA_ARGS__)
++#define Warning(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...) logger.info(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ 
+diff --git a/srsue/src/stack/mac/proc_phr.cc b/srsue/src/stack/mac/proc_phr.cc
+index ea7a81ce0..73c1c2385 100644
+--- a/srsue/src/stack/mac/proc_phr.cc
++++ b/srsue/src/stack/mac/proc_phr.cc
+@@ -20,7 +20,7 @@
+  */
+ 
+ #define Error(fmt, ...) logger.error(fmt, ##__VA_ARGS__)
+-#define Warning(fmt, ...) logger.warning(fmt, ##__VA_ARGS__)
++#define Warning(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...) logger.info(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ 
+@@ -127,7 +127,7 @@ void phr_proc::timer_expired(uint32_t timer_id)
+       phr_is_triggered = true;
+     }
+   } else {
+-    logger.warning("Received timer callback from unknown timer_id=%d", timer_id);
++    logger.debug("Received timer callback from unknown timer_id=%d", timer_id);
+   }
+ }
+ 
+diff --git a/srsue/src/stack/mac/proc_ra.cc b/srsue/src/stack/mac/proc_ra.cc
+index 59d2527fe..b25efad53 100644
+--- a/srsue/src/stack/mac/proc_ra.cc
++++ b/srsue/src/stack/mac/proc_ra.cc
+@@ -41,7 +41,7 @@ const char* state_str[] = {"RA:    IDLE:    ",
+ #define rError(fmt, ...) logger.error("%s" fmt, state_str[state], ##__VA_ARGS__)
+ #define rInfo(fmt, ...) logger.info("%s" fmt, state_str[state], ##__VA_ARGS__)
+ #define rDebug(fmt, ...) logger.debug("%s" fmt, state_str[state], ##__VA_ARGS__)
+-#define rWarning(fmt, ...) logger.warning("%s" fmt, state_str[state], ##__VA_ARGS__)
++#define rWarning(fmt, ...) logger.debug("%s" fmt, state_str[state], ##__VA_ARGS__)
+ 
+ // Table 7.2-1. Backoff Parameter values
+ uint32_t backoff_table[16] = {0, 10, 20, 30, 40, 60, 80, 120, 160, 240, 320, 480, 960, 960, 960, 960};
+@@ -179,7 +179,7 @@ void ra_proc::state_response_reception(uint32_t tti)
+   if (!rar_received) {
+     uint32_t interval = srsran_tti_interval(tti, ra_tti + 3 + rach_cfg.responseWindowSize - 1);
+     if (interval > 0 && interval < 100) {
+-      logger.warning("RA response not received within the response window");
++      logger.debug("RA response not received within the response window");
+       response_error();
+     }
+   }
+@@ -341,7 +341,7 @@ void ra_proc::process_timeadv_cmd(uint32_t tti, uint32_t ta)
+       logger.debug("Applying RAR TA CMD %d", ta);
+     } else {
+       // Ignore TA CMD
+-      logger.warning("Ignoring RAR TA CMD because timeAlignmentTimer still running");
++      logger.debug("Ignoring RAR TA CMD because timeAlignmentTimer still running");
+     }
+   }
+ }
+@@ -515,7 +515,7 @@ void ra_proc::start_mac_order(uint32_t msg_len_bits)
+     rInfo("Starting PRACH by MAC order");
+     initialization();
+   } else {
+-    logger.warning("Trying to start PRACH by MAC order in invalid state (%s)", state_str[state]);
++    logger.debug("Trying to start PRACH by MAC order in invalid state (%s)", state_str[state]);
+   }
+ }
+ 
+@@ -526,7 +526,7 @@ void ra_proc::start_pdcch_order()
+     rInfo("Starting PRACH by PDCCH order");
+     initialization();
+   } else {
+-    logger.warning("Trying to start PRACH by PDCCH order in invalid state (%s)", state_str[state]);
++    logger.debug("Trying to start PRACH by PDCCH order in invalid state (%s)", state_str[state]);
+   }
+ }
+ 
+diff --git a/srsue/src/stack/mac/proc_sr.cc b/srsue/src/stack/mac/proc_sr.cc
+index ad401a9ab..fc962a9c7 100644
+--- a/srsue/src/stack/mac/proc_sr.cc
++++ b/srsue/src/stack/mac/proc_sr.cc
+@@ -20,7 +20,7 @@
+  */
+ 
+ #define Error(fmt, ...) logger.error(fmt, ##__VA_ARGS__)
+-#define Warning(fmt, ...) logger.warning(fmt, ##__VA_ARGS__)
++#define Warning(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...) logger.info(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ 
+diff --git a/srsue/src/stack/mac/ul_harq.cc b/srsue/src/stack/mac/ul_harq.cc
+index 387e61e95..0f8badfe1 100644
+--- a/srsue/src/stack/mac/ul_harq.cc
++++ b/srsue/src/stack/mac/ul_harq.cc
+@@ -20,7 +20,7 @@
+  */
+ 
+ #define Error(fmt, ...) logger.error(fmt, ##__VA_ARGS__)
+-#define Warning(fmt, ...) logger.warning(fmt, ##__VA_ARGS__)
++#define Warning(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ #define Info(fmt, ...) logger.info(fmt, ##__VA_ARGS__)
+ #define Debug(fmt, ...) logger.debug(fmt, ##__VA_ARGS__)
+ 
+diff --git a/srsue/src/stack/mac_nr/mac_nr.cc b/srsue/src/stack/mac_nr/mac_nr.cc
+index 2b7f2e1e5..f2d9d0d8d 100644
+--- a/srsue/src/stack/mac_nr/mac_nr.cc
++++ b/srsue/src/stack/mac_nr/mac_nr.cc
+@@ -491,7 +491,7 @@ bool mac_nr::set_crnti(const uint16_t c_rnti_)
+     rntis.set_crnti(c_rnti_);
+     return true;
+   } else {
+-    logger.warning("Failed to set C-RNTI, 0x%X is not valid.", c_rnti_);
++    logger.debug("Failed to set C-RNTI, 0x%X is not valid.", c_rnti_);
+     return false;
+   }
+ }
+diff --git a/srsue/src/stack/mac_nr/proc_ra_nr.cc b/srsue/src/stack/mac_nr/proc_ra_nr.cc
+index 7e327d9eb..c770af154 100644
+--- a/srsue/src/stack/mac_nr/proc_ra_nr.cc
++++ b/srsue/src/stack/mac_nr/proc_ra_nr.cc
+@@ -60,7 +60,7 @@ void proc_ra_nr::init(phy_interface_mac_nr* phy_, srsran::ext_task_sched_handle*
+ void proc_ra_nr::set_config(const srsran::rach_cfg_nr_t& rach_cfg_)
+ {
+   if (state != IDLE) {
+-    logger.warning("Wrong state for ra reponse reception %s (expected state %s)",
++    logger.debug("Wrong state for ra reponse reception %s (expected state %s)",
+                    srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, state),
+                    srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, IDLE));
+     return;
+@@ -76,7 +76,7 @@ void proc_ra_nr::set_config(const srsran::rach_cfg_nr_t& rach_cfg_)
+ void proc_ra_nr::start_by_rrc()
+ {
+   if (state != IDLE || configured == false) {
+-    logger.warning("Trying to start PRACH by RRC order in invalid state (%s)",
++    logger.debug("Trying to start PRACH by RRC order in invalid state (%s)",
+                    srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, state));
+     return;
+   }
+@@ -88,7 +88,7 @@ void proc_ra_nr::start_by_rrc()
+ void proc_ra_nr::start_by_mac()
+ {
+   if (state != IDLE || configured == false) {
+-    logger.warning("Trying to start PRACH by MAC order in invalid state (%s)",
++    logger.debug("Trying to start PRACH by MAC order in invalid state (%s)",
+                    srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, state));
+     return;
+   }
+@@ -137,14 +137,14 @@ void proc_ra_nr::received_contention_resolution(bool is_successful)
+ void proc_ra_nr::timer_expired(uint32_t timer_id)
+ {
+   if (prach_send_timer.id() == timer_id) {
+-    logger.warning("PRACH Send timer expired. PRACH was not transmitted within %d ttis by phy. (TODO)",
++    logger.debug("PRACH Send timer expired. PRACH was not transmitted within %d ttis by phy. (TODO)",
+                    prach_send_timer.duration());
+     ra_error();
+   } else if (rar_timeout_timer.id() == timer_id) {
+-    logger.warning("RAR Timer expired. RA response not received within the response window");
++    logger.debug("RAR Timer expired. RA response not received within the response window");
+     ra_error();
+   } else if (contention_resolution_timer.id() == timer_id) {
+-    logger.warning("Contention Resolution Timer expired. Stopping PDCCH Search and going to Response Error (TODO)");
++    logger.debug("Contention Resolution Timer expired. Stopping PDCCH Search and going to Response Error (TODO)");
+     ra_error();
+   } else if (backoff_timer.id() == timer_id) {
+     logger.info("Transmitting new preamble (%d/%d)", preamble_transmission_counter, rach_cfg.preambleTransMax);
+@@ -198,7 +198,7 @@ void proc_ra_nr::ra_response_reception(const mac_interface_phy_nr::tb_action_dl_
+ {
+   std::lock_guard<std::mutex> lock(mutex);
+   if (state != WAITING_FOR_RESPONSE_RECEPTION) {
+-    logger.warning(
++    logger.debug(
+         "Wrong state for ra reponse reception %s (expected state %s)",
+         srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, state),
+         srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, WAITING_FOR_RESPONSE_RECEPTION));
+@@ -208,7 +208,7 @@ void proc_ra_nr::ra_response_reception(const mac_interface_phy_nr::tb_action_dl_
+   if (tb.ack && tb.payload != nullptr) {
+     srsran::mac_rar_pdu_nr pdu;
+     if (!pdu.unpack(tb.payload->msg, tb.payload->N_bytes)) {
+-      logger.warning("Error unpacking RAR PDU");
++      logger.debug("Error unpacking RAR PDU");
+       return;
+     }
+ 
+@@ -257,7 +257,7 @@ void proc_ra_nr::ra_response_reception(const mac_interface_phy_nr::tb_action_dl_
+ void proc_ra_nr::ra_contention_resolution(bool is_successful, bool is_ul_grant)
+ {
+   if (state != WAITING_FOR_CONTENTION_RESOLUTION) {
+-    logger.warning(
++    logger.debug(
+         "Wrong state for ra contention resolution by phy %s (expected state %s)",
+         srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, state),
+         srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, WAITING_FOR_CONTENTION_RESOLUTION));
+@@ -285,7 +285,7 @@ void proc_ra_nr::ra_contention_resolution(bool is_successful, bool is_ul_grant)
+ void proc_ra_nr::ra_completion()
+ {
+   if (state != WAITING_FOR_COMPLETION) {
+-    logger.warning("Wrong state for ra completion by phy %s (expected state %s)",
++    logger.debug("Wrong state for ra completion by phy %s (expected state %s)",
+                    srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, state),
+                    srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, WAITING_FOR_COMPLETION));
+     return;
+@@ -315,7 +315,7 @@ void proc_ra_nr::ra_error()
+   bool     ra_procedure_completed = false; // true = (unsuccessfully) completed, false = uncompleted
+ 
+   if (preamble_transmission_counter >= rach_cfg.preambleTransMax + 1) {
+-    logger.warning("Maximum number of transmissions reached (%d)", rach_cfg.preambleTransMax);
++    logger.debug("Maximum number of transmissions reached (%d)", rach_cfg.preambleTransMax);
+     // if the Random Access Preamble is transmitted on the SpCell assumption (TODO)
+     mac.rrc_ra_problem();                  //  indicate a Random Access problem to upper layers;
+     if (started_by == initiators_t::MAC) { // if this Random Access procedure was triggered for SI request
+@@ -345,7 +345,7 @@ void proc_ra_nr::prach_sent(uint32_t tti, uint32_t s_id, uint32_t t_id, uint32_t
+ {
+   task_queue.push([this, tti, s_id, t_id, f_id, ul_carrier_id]() {
+     if (state != WAITING_FOR_PRACH_SENT) {
+-      logger.warning("Wrong state for prach sent notification by phy %s (expected state %s)",
++      logger.debug("Wrong state for prach sent notification by phy %s (expected state %s)",
+                      srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, state),
+                      srsran::enum_to_text(state_str_nr, (uint32_t)ra_state_t::MAX_RA_STATES, WAITING_FOR_PRACH_SENT));
+       return;
+diff --git a/srsue/src/stack/mac_nr/proc_sr_nr.cc b/srsue/src/stack/mac_nr/proc_sr_nr.cc
+index b3cb85bc7..73e997aea 100644
+--- a/srsue/src/stack/mac_nr/proc_sr_nr.cc
++++ b/srsue/src/stack/mac_nr/proc_sr_nr.cc
+@@ -181,7 +181,7 @@ void proc_sr_nr::start()
+       logger.debug("SR:    Already pending for Tx");
+     }
+   } else {
+-    logger.warning("SR:    Procedure not initiated");
++    logger.debug("SR:    Procedure not initiated");
+   }
+ }
+ 
+diff --git a/srsue/src/stack/mac_nr/test/proc_ra_nr_test.cc b/srsue/src/stack/mac_nr/test/proc_ra_nr_test.cc
+index 4ae6e41da..402776ebe 100644
+--- a/srsue/src/stack/mac_nr/test/proc_ra_nr_test.cc
++++ b/srsue/src/stack/mac_nr/test/proc_ra_nr_test.cc
+@@ -85,7 +85,7 @@ public:
+ 
+   void msga_flush(){};
+   // RRC RA problem
+-  void rrc_ra_problem() { logger.warning("Dummy MAC RRC ra problem"); }
++  void rrc_ra_problem() { logger.debug("Dummy MAC RRC ra problem"); }
+   void rrc_ra_completed() { logger.info("Dummy MAC RRC ra completed"); }
+ 
+ private:
+diff --git a/srsue/src/stack/mac_nr/ul_harq_nr.cc b/srsue/src/stack/mac_nr/ul_harq_nr.cc
+index b0331237d..f2102ec96 100644
+--- a/srsue/src/stack/mac_nr/ul_harq_nr.cc
++++ b/srsue/src/stack/mac_nr/ul_harq_nr.cc
+@@ -95,9 +95,9 @@ void ul_harq_entity_nr::new_grant_ul(const mac_interface_phy_nr::mac_nr_grant_ul
+     harq_procs.at(grant.pid).new_grant_ul(grant, ndi_toggled, action);
+   } else if (mac->get_csrnti() == grant.rnti) {
+     // SPS not supported
+-    logger.warning("Ignoring grant for CS-RNTI=0x%x", grant.rnti);
++    logger.debug("Ignoring grant for CS-RNTI=0x%x", grant.rnti);
+   } else {
+-    logger.warning("Received grant for unknown rnti=0x%x", grant.rnti);
++    logger.debug("Received grant for unknown rnti=0x%x", grant.rnti);
+   }
+ 
+   srsran_expect(action->tb.enabled ? action->tb.payload != nullptr : true,
+diff --git a/srsue/src/stack/rrc/phy_controller.cc b/srsue/src/stack/rrc/phy_controller.cc
+index 93a4ce49d..1d85732d2 100644
+--- a/srsue/src/stack/rrc/phy_controller.cc
++++ b/srsue/src/stack/rrc/phy_controller.cc
+@@ -46,13 +46,13 @@ void phy_controller::in_sync()
+ 
+ bool phy_controller::set_cell_config(const srsran::phy_cfg_t& config, uint32_t cc_idx)
+ {
+-  logger.info("Setting PHY config for cc_idx=%d", cc_idx);
++  logger.debug("Setting PHY config for cc_idx=%d", cc_idx);
+   return set_cell_config(config, cc_idx, true);
+ }
+ 
+ void phy_controller::set_phy_to_default()
+ {
+-  logger.info("Setting default PHY config (common and dedicated)");
++  logger.debug("Setting default PHY config (common and dedicated)");
+ 
+   srsran::phy_cfg_t& default_cfg = current_cells_cfg[0];
+   default_cfg.set_defaults();
+@@ -64,7 +64,7 @@ void phy_controller::set_phy_to_default()
+ /// Apply default PHY config for all SCells as specified in TS 36.331 9.2.4
+ void phy_controller::set_phy_to_default_dedicated()
+ {
+-  logger.info("Setting default dedicated PHY config");
++  logger.debug("Setting default dedicated PHY config");
+ 
+   srsran::phy_cfg_t& default_cfg = current_cells_cfg[0];
+   default_cfg.set_defaults_dedicated();
+@@ -75,7 +75,7 @@ void phy_controller::set_phy_to_default_dedicated()
+ 
+ void phy_controller::set_phy_to_default_pucch_srs()
+ {
+-  logger.info("Setting default PHY config dedicated");
++  logger.debug("Setting default PHY config dedicated");
+ 
+   srsran::phy_cfg_t& default_cfg_ded = current_cells_cfg[0];
+   default_cfg_ded.set_defaults_pucch_sr();
+@@ -100,7 +100,7 @@ bool phy_controller::set_cell_config(const srsran::phy_cfg_t& cfg, uint32_t cc_i
+ void phy_controller::set_config_complete()
+ {
+   if (nof_pending_configs == 0) {
+-    logger.warning("Received more phy config complete signals than the ones scheduled");
++    logger.debug("Received more phy config complete signals than the ones scheduled");
+     return;
+   }
+   nof_pending_configs--;
+@@ -113,12 +113,12 @@ void phy_controller::set_config_complete()
+ bool phy_controller::start_cell_select(const phy_cell_t& phy_cell, srsran::event_observer<bool> observer)
+ {
+   if (is_in_state<selecting_cell>()) {
+-    logger.warning("Failed to launch cell selection as it is already running");
++    logger.debug("Failed to launch cell selection as it is already running");
+     return false;
+   }
+   trigger(cell_sel_cmd{phy_cell});
+   if (not is_in_state<selecting_cell>()) {
+-    logger.warning("Failed to launch cell selection. Current state: %s", current_state_name().c_str());
++    logger.debug("Failed to launch cell selection. Current state: %s", current_state_name().c_str());
+     return false;
+   }
+   cell_selection_notifier = std::move(observer);
+@@ -140,7 +140,7 @@ void phy_controller::selecting_cell::enter(phy_controller* f, const cell_sel_cmd
+   target_cell     = ev.phy_cell;
+   csel_res.result = false;
+ 
+-  fsmInfo("Starting for pci=%d, earfcn=%d", target_cell.pci, target_cell.earfcn);
++  //fsmInfo("Starting for pci=%d, earfcn=%d", target_cell.pci, target_cell.earfcn);
+   if (not f->phy->cell_select(target_cell)) {
+     trigger(srsran::failure_ev{});
+   }
+@@ -149,12 +149,13 @@ void phy_controller::selecting_cell::enter(phy_controller* f, const cell_sel_cmd
+ void phy_controller::selecting_cell::exit(phy_controller* f)
+ {
+   wait_in_sync_timer.stop();
+-
++  /*
+   if (csel_res.result) {
+     fsmInfo("Cell %s successfully selected", to_string(target_cell).c_str());
+   } else {
+     fsmWarning("Failed to select cell %s", to_string(target_cell).c_str());
+   }
++  */
+ 
+   // Signal result back to FSM that called cell selection
+   bool result = csel_res.result;
+@@ -178,12 +179,12 @@ void phy_controller::selecting_cell::wait_in_sync::enter(selecting_cell* f)
+ bool phy_controller::start_cell_search(srsran::event_observer<cell_srch_res> observer, int earfcn)
+ {
+   if (is_in_state<searching_cell>()) {
+-    fsmInfo("Cell search already launched.");
++    //fsmInfo("Cell search already launched.");
+     return true;
+   }
+   trigger(cell_search_cmd{earfcn});
+   if (not is_in_state<searching_cell>()) {
+-    fsmWarning("Failed to launch cell search");
++    //fsmWarning("Failed to launch cell search");
+     return false;
+   }
+   cell_search_observers.subscribe(observer);
+@@ -197,12 +198,13 @@ void phy_controller::cell_search_completed(cell_search_ret_t cs_ret, phy_cell_t
+ 
+ void phy_controller::searching_cell::enter(phy_controller* f, const cell_search_cmd& ev)
+ {
+-  otherfsmInfo(f, "Initiating Cell search");
++  //otherfsmInfo(f, "Initiating Cell search");
+   f->phy->cell_search(ev.earfcn);
+ }
+ 
+ void phy_controller::handle_cell_search_res(searching_cell& s, const cell_srch_res& result)
+ {
++  /*
+   switch (result.cs_ret.found) {
+     case cell_search_ret_t::CELL_FOUND:
+       fsmInfo("PHY cell search completed. Found cell %s", to_string(result.found_cell).c_str());
+@@ -214,6 +216,7 @@ void phy_controller::handle_cell_search_res(searching_cell& s, const cell_srch_r
+       fsmError("Invalid cell search result");
+       // TODO: check what errors can happen (currently not handled in our code)
+   }
++  */
+ 
+   // Signal result back to FSM that called cell search
+   auto copy = result;
+diff --git a/srsue/src/stack/rrc/rrc.cc b/srsue/src/stack/rrc/rrc.cc
+index 5d5ab8d6e..8b703df46 100644
+--- a/srsue/src/stack/rrc/rrc.cc
++++ b/srsue/src/stack/rrc/rrc.cc
+@@ -50,8 +50,8 @@ using srsran::srb_to_lcid;
+ 
+ namespace srsue {
+ 
+-const static uint32_t NOF_REQUIRED_SIBS                = 4;
+-const static uint32_t required_sibs[NOF_REQUIRED_SIBS] = {0, 1, 2, 12}; // SIB1, SIB2, SIB3 and SIB13 (eMBMS)
++const static uint32_t NOF_REQUIRED_SIBS                = 13;
++const static uint32_t required_sibs[NOF_REQUIRED_SIBS] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}; // SIB1, SIB2, SIB3 and SIB13 (eMBMS)
+ 
+ /*******************************************************************************
+   Base functions
+@@ -102,7 +102,13 @@ void rrc::log_rrc_message(const std::string    source,
+                  pdu->N_bytes);
+     logger.debug("Content:\n%s", json_writer.to_string().c_str());
+   } else if (logger.info.enabled()) {
+-    logger.info("%s - %s %s (%d B)", source.c_str(), (dir == Rx) ? "Rx" : "Tx", msg_type.c_str(), pdu->N_bytes);
++    asn1::json_writer json_writer;
++    msg.to_json(json_writer);
++    std::string rrc_msg = json_writer.to_string();
++    rrc_msg.erase(std::remove(rrc_msg.begin(), rrc_msg.end(), '\n'), rrc_msg.end());
++    rrc_msg.erase(std::remove(rrc_msg.begin(), rrc_msg.end(), '\t'), rrc_msg.end());
++    rrc_msg.erase(std::remove(rrc_msg.begin(), rrc_msg.end(), ' '), rrc_msg.end());
++    logger.info("Content: %s", rrc_msg.c_str());
+   }
+ }
+ 
+@@ -161,7 +167,7 @@ void rrc::init(phy_interface_rrc_lte* phy_,
+ 
+   struct timeval tv;
+   gettimeofday(&tv, NULL);
+-  logger.info("using srand seed of %ld", tv.tv_usec);
++  logger.debug("using srand seed of %ld", tv.tv_usec);
+ 
+   // set seed (used in CHAP auth and attach)
+   srand(tv.tv_usec);
+@@ -317,7 +323,7 @@ void rrc::plmn_select(srsran::plmn_id_t plmn_id)
+   plmn_is_selected = true;
+   selected_plmn_id = plmn_id;
+ 
+-  logger.info("PLMN Selected %s", plmn_id.to_string().c_str());
++  logger.debug("PLMN Selected %s", plmn_id.to_string().c_str());
+ }
+ 
+ /* 5.3.3.2 Initiation of RRC Connection Establishment procedure
+@@ -342,7 +348,7 @@ void rrc::set_ue_identity(srsran::s_tmsi_t s_tmsi)
+ {
+   ue_identity_configured = true;
+   ue_identity            = s_tmsi;
+-  logger.info(
++  logger.debug(
+       "Set ue-Identity to 0x%" PRIu64 ":0x%" PRIu64 "", (uint64_t)ue_identity.mmec, (uint64_t)ue_identity.m_tmsi);
+ }
+ 
+@@ -486,14 +492,14 @@ void rrc::out_of_sync()
+       // nor T311 is running
+       bool t311_running = t311.is_running() || connection_reest.is_busy();
+       if (!t300.is_running() and !t301.is_running() and !t304.is_running() and !t310.is_running() and !t311_running) {
+-        logger.info("Received out-of-sync while in state %s. n310=%d, t311=%s, t310=%s",
++        logger.debug("Received out-of-sync while in state %s. n310=%d, t311=%s, t310=%s",
+                     rrc_state_text[state],
+                     n310_cnt,
+                     t311.is_running() ? "running" : "stop",
+                     t310.is_running() ? "running" : "stop");
+         n310_cnt++;
+         if (n310_cnt == N310) {
+-          logger.info(
++          logger.debug(
+               "Detected %d out-of-sync from PHY. Trying to resync. Starting T310 timer %d ms", N310, t310.duration());
+           t310.run();
+           n310_cnt = 0;
+@@ -513,7 +519,7 @@ void rrc::in_sync()
+     if (n311_cnt == N311) {
+       t310.stop();
+       n311_cnt = 0;
+-      logger.info("Detected %d in-sync from PHY. Stopping T310 timer", N311);
++      logger.debug("Detected %d in-sync from PHY. Stopping T310 timer", N311);
+     }
+   }
+ }
+@@ -636,7 +642,7 @@ bool rrc::mbms_service_start(uint32_t serv, uint32_t port)
+     return ret;
+   }
+ 
+-  logger.info("%s", print_mbms().c_str());
++  logger.debug("%s", print_mbms().c_str());
+ 
+   mcch_msg_type_c msg = meas_cells.serving_cell().mcch.msg;
+   for (uint32_t i = 0; i < msg.c1().mbsfn_area_cfg_r9().pmch_info_list_r9.size(); i++) {
+@@ -691,14 +697,14 @@ void rrc::radio_link_failure_process()
+ 
+   if (state == RRC_STATE_CONNECTED) {
+     if (security_is_activated) {
+-      logger.info("Detected Radio-Link Failure with active AS security. Starting ConnectionReestablishment...");
++      logger.debug("Detected Radio-Link Failure with active AS security. Starting ConnectionReestablishment...");
+       start_con_restablishment(reest_cause_e::other_fail);
+     } else {
+-      logger.info("Detected Radio-Link Failure with AS security deactivated. Going to IDLE...");
++      logger.debug("Detected Radio-Link Failure with AS security deactivated. Going to IDLE...");
+       start_go_idle();
+     }
+   } else {
+-    logger.info("Detected Radio-Link Failure while RRC_IDLE. Ignoring it.");
++    logger.debug("Detected Radio-Link Failure while RRC_IDLE. Ignoring it.");
+   }
+ }
+ 
+@@ -714,34 +720,34 @@ void rrc::release_pucch_srs()
+ void rrc::ra_problem()
+ {
+   if (not t300.is_running() and not t301.is_running() and not t304.is_running() and not t311.is_running()) {
+-    logger.warning("MAC indicated RA problem. Starting RLF");
++    logger.debug("MAC indicated RA problem. Starting RLF");
+     radio_link_failure_push_cmd();
+   } else {
+-    logger.warning("MAC indicated RA problem but either T300, T301, T304 or T311 is running. Ignoring it.");
++    logger.debug("MAC indicated RA problem but either T300, T301, T304 or T311 is running. Ignoring it.");
+   }
+ }
+ 
+ void rrc::max_retx_attempted()
+ {
+   // TODO: Handle the radio link failure
+-  logger.warning("Max RLC reTx attempted. Starting RLF");
++  logger.debug("Max RLC reTx attempted. Starting RLF");
+   radio_link_failure_push_cmd();
+ }
+ 
+ void rrc::protocol_failure()
+ {
+-  logger.warning("RLC protocol failure detected");
++  logger.debug("RLC protocol failure detected");
+ }
+ 
+ void rrc::timer_expired(uint32_t timeout_id)
+ {
+   if (timeout_id == t310.id()) {
+-    logger.info("Timer T310 expired: Radio Link Failure");
++    logger.debug("Timer T310 expired: Radio Link Failure");
+     radio_link_failure_push_cmd();
+   } else if (timeout_id == t311.id()) {
+     srsran::console("Timer T311 expired: Going to RRC IDLE\n");
+     if (connection_reest.is_idle()) {
+-      logger.info("Timer T311 expired: Going to RRC IDLE");
++      logger.debug("Timer T311 expired: Going to RRC IDLE");
+       start_go_idle();
+     } else {
+       // Do nothing, this is handled by the procedure
+@@ -749,19 +755,19 @@ void rrc::timer_expired(uint32_t timeout_id)
+     }
+   } else if (timeout_id == t301.id()) {
+     if (state == RRC_STATE_IDLE) {
+-      logger.info("Timer T301 expired: Already in IDLE.");
++      logger.debug("Timer T301 expired: Already in IDLE.");
+     } else {
+-      logger.info("Timer T301 expired: Going to RRC IDLE");
++      logger.debug("Timer T301 expired: Going to RRC IDLE");
+       connection_reest.trigger(connection_reest_proc::t301_expiry{});
+     }
+   } else if (timeout_id == t302.id()) {
+-    logger.info("Timer T302 expired. Informing NAS about barrier alleviation");
++    logger.debug("Timer T302 expired. Informing NAS about barrier alleviation");
+     nas->set_barring(srsran::barring_t::none);
+   } else if (timeout_id == t300.id()) {
+     // Do nothing, handled in connection_request()
+   } else if (timeout_id == t304.id()) {
+     srsran::console("Timer t304 expired: Handover failed\n");
+-    logger.info("Timer t304 expired: Handover failed");
++    logger.debug("Timer t304 expired: Handover failed");
+     ho_failed();
+   } else {
+     logger.error("Timeout from unknown timer id %d", timeout_id);
+@@ -796,7 +802,7 @@ bool rrc::nr_reconfiguration_proc(const rrc_conn_recfg_r8_ies_s& rx_recfg, bool*
+ 
+   switch (rrc_conn_recfg_v1510_ies->nr_cfg_r15.type()) {
+     case setup_opts::options::release:
+-      logger.info("NR config R15 of type release");
++      logger.debug("NR config R15 of type release");
+       break;
+     case setup_opts::options::setup:
+       endc_release_and_add_r15 = rrc_conn_recfg_v1510_ies->nr_cfg_r15.setup().endc_release_and_add_r15;
+@@ -919,7 +925,7 @@ void rrc::send_con_restablish_request(reest_cause_e cause, uint16_t crnti, uint1
+   uint32_t N_bits  = (uint32_t)bref.distance(varShortMAC_packed);
+   uint32_t N_bytes = ((N_bits - 1) / 8 + 1);
+ 
+-  logger.info(
++  logger.debug(
+       "Encoded varShortMAC: cellId=0x%x, PCI=%d, rnti=0x%x (%d bytes, %d bits)", cellid, pci, crnti, N_bytes, N_bits);
+ 
+   // Compute MAC-I
+@@ -953,7 +959,7 @@ void rrc::send_con_restablish_request(reest_cause_e cause, uint16_t crnti, uint1
+                         mac_key);
+       break;
+     default:
+-      logger.info("Unsupported integrity algorithm during reestablishment");
++      logger.debug("Unsupported integrity algorithm during reestablishment");
+   }
+ 
+   // Prepare ConnectionRestalishmentRequest packet
+@@ -970,7 +976,7 @@ void rrc::send_con_restablish_request(reest_cause_e cause, uint16_t crnti, uint1
+                   meas_cells.serving_cell().phy_cell.pci,
+                   meas_cells.serving_cell().phy_cell.earfcn,
+                   cause.to_string());
+-  logger.info("RRC Connection Reestablishment to PCI=%d, EARFCN=%d (Cause: \"%s\")",
++  logger.debug("RRC Connection Reestablishment to PCI=%d, EARFCN=%d (Cause: \"%s\")",
+               meas_cells.serving_cell().phy_cell.pci,
+               meas_cells.serving_cell().phy_cell.earfcn,
+               cause.to_string());
+@@ -1110,7 +1116,7 @@ bool rrc::con_reconfig_ho(const rrc_conn_recfg_s& reconfig)
+ void rrc::start_go_idle()
+ {
+   if (not idle_setter.launch()) {
+-    logger.info("Failed to set RRC to IDLE");
++    logger.debug("Failed to set RRC to IDLE");
+     return;
+   }
+   callback_list.add_proc(idle_setter);
+@@ -1191,7 +1197,7 @@ void rrc::handle_rrc_connection_release(const asn1::rrc::rrc_conn_release_s& rel
+       srsran::console("RedirectedCarrierInfo present (type %s, earfcn: %d) - Redirecting\n",
+                       release.crit_exts.c1().rrc_conn_release_r8().redirected_carrier_info.type().to_string(),
+                       earfcn);
+-      logger.info("RedirectedCarrierInfo present (type %s, earfcn: %d) - Redirecting",
++      logger.debug("RedirectedCarrierInfo present (type %s, earfcn: %d) - Redirecting",
+                   release.crit_exts.c1().rrc_conn_release_r8().redirected_carrier_info.type().to_string(),
+                   earfcn);
+ 
+@@ -1211,7 +1217,7 @@ void rrc::start_rrc_redirect(uint32_t new_dl_earfcn)
+ void rrc::leave_connected()
+ {
+   srsran::console("RRC IDLE\n");
+-  logger.info("Leaving RRC_CONNECTED state");
++  logger.debug("Leaving RRC_CONNECTED state");
+   state                 = RRC_STATE_IDLE;
+   security_is_activated = false;
+ 
+@@ -1234,7 +1240,7 @@ void rrc::leave_connected()
+   // 1> if leaving RRC_CONNECTED was not triggered by reception of the MobilityFromEUTRACommand message:
+   //    2> enter RRC_IDLE by performing cell selection in accordance with the cell selection process, defined for the
+   //       case of leaving RRC_CONNECTED, as specified in TS 36.304 [4];
+-  logger.info("Going RRC_IDLE");
++  logger.debug("Going RRC_IDLE");
+   if (phy->cell_is_camping()) {
+     // Receive paging
+     mac->pcch_start_rx();
+@@ -1264,7 +1270,7 @@ void rrc::stop_timers()
+ void rrc::start_con_restablishment(reest_cause_e cause)
+ {
+   if (not connection_reest.launch(cause)) {
+-    logger.info("Failed to launch connection re-establishment procedure");
++    logger.debug("Failed to launch connection re-establishment procedure");
+   }
+ 
+   callback_list.add_proc(connection_reest);
+@@ -1402,7 +1408,7 @@ void rrc::parse_pdu_bcch_dlsch(unique_byte_buffer_t pdu)
+   log_rrc_message("BCCH-DLSCH", Rx, pdu.get(), dlsch_msg, dlsch_msg.msg.c1().type().to_string());
+ 
+   if (dlsch_msg.msg.c1().type() == bcch_dl_sch_msg_type_c::c1_c_::types::sib_type1) {
+-    logger.info("Processing SIB1 (1/1)");
++    logger.debug("Processing SIB1 (1/1)");
+     meas_cells.serving_cell().set_sib1(dlsch_msg.msg.c1().sib_type1());
+     si_acquirer.trigger(si_acquire_proc::sib_received_ev{});
+     handle_sib1();
+@@ -1410,7 +1416,7 @@ void rrc::parse_pdu_bcch_dlsch(unique_byte_buffer_t pdu)
+     sys_info_r8_ies_s::sib_type_and_info_l_& sib_list =
+         dlsch_msg.msg.c1().sys_info().crit_exts.sys_info_r8().sib_type_and_info;
+     for (uint32_t i = 0; i < sib_list.size(); ++i) {
+-      logger.info("Processing SIB%d (%d/%d)", get_sib_number(sib_list[i].type()), i, sib_list.size());
++      logger.debug("Processing SIB%d (%d/%d)", get_sib_number(sib_list[i].type()), i, sib_list.size());
+       switch (sib_list[i].type().value) {
+         case sib_info_item_c::types::sib2:
+           if (not meas_cells.serving_cell().has_sib2()) {
+@@ -1434,7 +1440,7 @@ void rrc::parse_pdu_bcch_dlsch(unique_byte_buffer_t pdu)
+           si_acquirer.trigger(si_acquire_proc::sib_received_ev{});
+           break;
+         default:
+-          logger.warning("SIB%d is not supported", get_sib_number(sib_list[i].type()));
++          logger.debug("SIB%d is not supported", get_sib_number(sib_list[i].type()));
+       }
+     }
+   }
+@@ -1443,7 +1449,7 @@ void rrc::parse_pdu_bcch_dlsch(unique_byte_buffer_t pdu)
+ void rrc::handle_sib1()
+ {
+   const sib_type1_s* sib1 = meas_cells.serving_cell().sib1ptr();
+-  logger.info("SIB1 received, CellID=%d, si_window=%d, sib2_period=%d",
++  logger.debug("SIB1 received, CellID=%d, si_window=%d, sib2_period=%d",
+               meas_cells.serving_cell().get_cell_id() & 0xfff,
+               sib1->si_win_len.to_number(),
+               sib1->sched_info_list[0].si_periodicity.to_number());
+@@ -1468,7 +1474,7 @@ void rrc::handle_sib1()
+ 
+ void rrc::handle_sib2()
+ {
+-  logger.info("SIB2 received");
++  logger.debug("SIB2 received");
+ 
+   const sib_type2_s* sib2 = meas_cells.serving_cell().sib2ptr();
+ 
+@@ -1526,7 +1532,7 @@ void rrc::handle_sib2()
+   N310 = sib2->ue_timers_and_consts.n310.to_number();
+   N311 = sib2->ue_timers_and_consts.n311.to_number();
+ 
+-  logger.info("Set Constants and Timers: N310=%d, N311=%d, t300=%d, t301=%d, t310=%d, t311=%d",
++  logger.debug("Set Constants and Timers: N310=%d, N311=%d, t300=%d, t301=%d, t310=%d, t311=%d",
+               N310,
+               N311,
+               t300.duration(),
+@@ -1537,7 +1543,7 @@ void rrc::handle_sib2()
+ 
+ void rrc::handle_sib3()
+ {
+-  logger.info("SIB3 received");
++  logger.debug("SIB3 received");
+ 
+   const sib_type3_s* sib3 = meas_cells.serving_cell().sib3ptr();
+ 
+@@ -1558,7 +1564,7 @@ void rrc::handle_sib3()
+ 
+ void rrc::handle_sib13()
+ {
+-  logger.info("SIB13 received");
++  logger.debug("SIB13 received");
+ 
+   const sib_type13_r9_s* sib13 = meas_cells.serving_cell().sib13ptr();
+ 
+@@ -1605,7 +1611,7 @@ void rrc::process_pcch(unique_byte_buffer_t pdu)
+   log_rrc_message("PCCH", Rx, pdu.get(), pcch_msg, pcch_msg.msg.c1().type().to_string());
+ 
+   if (not ue_identity_configured) {
+-    logger.warning("Received paging message but no ue-Identity is configured");
++    logger.debug("Received paging message but no ue-Identity is configured");
+     return;
+   }
+ 
+@@ -1648,7 +1654,7 @@ void rrc::parse_pdu_mch(uint32_t lcid, srsran::unique_byte_buffer_t pdu)
+   log_rrc_message(
+       "MCH", Rx, pdu.get(), meas_cells.serving_cell().mcch, meas_cells.serving_cell().mcch.msg.c1().type().to_string());
+   if (args.mbms_service_id >= 0) {
+-    logger.info("Attempting to auto-start MBMS service %d", args.mbms_service_id);
++    logger.debug("Attempting to auto-start MBMS service %d", args.mbms_service_id);
+     mbms_service_start(args.mbms_service_id, args.mbms_service_port);
+   }
+ }
+@@ -1690,7 +1696,7 @@ void rrc::send_ul_ccch_msg(const ul_ccch_msg_s& msg)
+   uint32_t lcid = srb_to_lcid(lte_srb::srb0);
+   log_rrc_message(get_rb_name(lcid), Tx, pdcp_buf.get(), msg, msg.msg.c1().type().to_string());
+ 
+-  rlc->write_sdu(lcid, std::move(pdcp_buf));
++  //rlc->write_sdu(lcid, std::move(pdcp_buf));
+ }
+ 
+ void rrc::send_ul_dcch_msg(uint32_t lcid, const ul_dcch_msg_s& msg)
+@@ -1718,13 +1724,13 @@ void rrc::send_ul_dcch_msg(uint32_t lcid, const ul_dcch_msg_s& msg)
+     }
+   }
+ 
+-  pdcp->write_sdu(lcid, std::move(pdcp_buf));
++  //pdcp->write_sdu(lcid, std::move(pdcp_buf));
+ }
+ 
+ void rrc::write_sdu(srsran::unique_byte_buffer_t sdu)
+ {
+   if (state == RRC_STATE_IDLE) {
+-    logger.warning("Received ULInformationTransfer SDU when in IDLE");
++    logger.debug("Received ULInformationTransfer SDU when in IDLE");
+     return;
+   }
+   send_ul_info_transfer(std::move(sdu));
+@@ -1737,7 +1743,7 @@ void rrc::write_pdu(uint32_t lcid, unique_byte_buffer_t pdu)
+ 
+ void rrc::notify_pdcp_integrity_error(uint32_t lcid)
+ {
+-  logger.warning("Received integrity protection failure indication, lcid=%u", lcid);
++  logger.debug("Received integrity protection failure indication, lcid=%u", lcid);
+ }
+ 
+ void rrc::process_pdu(uint32_t lcid, srsran::unique_byte_buffer_t pdu)
+@@ -1774,7 +1780,7 @@ void rrc::parse_dl_ccch(unique_byte_buffer_t pdu)
+     case dl_ccch_msg_type_c::c1_c_::types::rrc_conn_reject: {
+       // 5.3.3.8
+       rrc_conn_reject_r8_ies_s* reject_r8 = &c1->rrc_conn_reject().crit_exts.c1().rrc_conn_reject_r8();
+-      logger.info("Received ConnectionReject. Wait time: %d", reject_r8->wait_time);
++      logger.debug("Received ConnectionReject. Wait time: %d", reject_r8->wait_time);
+       srsran::console("Received ConnectionReject. Wait time: %d\n", reject_r8->wait_time);
+ 
+       t300.stop();
+@@ -1849,7 +1855,7 @@ void rrc::parse_dl_dcch(uint32_t lcid, unique_byte_buffer_t pdu)
+                                .security_mode_cmd_r8()
+                                .security_cfg_smc.security_algorithm_cfg.integrity_prot_algorithm.value;
+ 
+-      logger.info("Received Security Mode Command eea: %s, eia: %s",
++      logger.debug("Received Security Mode Command eea: %s, eia: %s",
+                   ciphering_algorithm_id_text[sec_cfg.cipher_algo],
+                   integrity_algorithm_id_text[sec_cfg.integ_algo]);
+ 
+@@ -1894,9 +1900,9 @@ void rrc::generate_as_keys(void)
+   logger.debug(k_asme, 32, "UE K_asme");
+   logger.debug("Generating K_enb with UL NAS COUNT: %d", nas->get_k_enb_count());
+   usim->generate_as_keys(k_asme, nas->get_k_enb_count(), &sec_cfg);
+-  logger.info(sec_cfg.k_rrc_enc.data(), 32, "RRC encryption key - k_rrc_enc");
+-  logger.info(sec_cfg.k_rrc_int.data(), 32, "RRC integrity key  - k_rrc_int");
+-  logger.info(sec_cfg.k_up_enc.data(), 32, "UP encryption key  - k_up_enc");
++  logger.debug(sec_cfg.k_rrc_enc.data(), 32, "RRC encryption key - k_rrc_enc");
++  logger.debug(sec_cfg.k_rrc_int.data(), 32, "RRC integrity key  - k_rrc_int");
++  logger.debug(sec_cfg.k_up_enc.data(), 32, "UP encryption key  - k_up_enc");
+ }
+ 
+ /*******************************************************************************
+@@ -1912,7 +1918,7 @@ void rrc::enable_capabilities()
+ {
+   bool enable_ul_64 = args.ue_category >= 5 &&
+                       meas_cells.serving_cell().sib2ptr()->rr_cfg_common.pusch_cfg_common.pusch_cfg_basic.enable64_qam;
+-  logger.info("%s 64QAM PUSCH", enable_ul_64 ? "Enabling" : "Disabling");
++  logger.debug("%s 64QAM PUSCH", enable_ul_64 ? "Enabling" : "Disabling");
+ }
+ 
+ void rrc::handle_ue_capability_enquiry(const ue_cap_enquiry_s& enquiry)
+@@ -2252,12 +2258,12 @@ void rrc::handle_ue_capability_enquiry(const ue_cap_enquiry_s& enquiry)
+       rat_idx++;
+     } else if (enquiry.crit_exts.c1().ue_cap_enquiry_r8().ue_cap_request[i] == rat_type_e::eutra_nr && has_nr_dc()) {
+       info->ue_cap_rat_container_list[rat_idx] = get_eutra_nr_capabilities();
+-      logger.info("Including EUTRA-NR capabilities in UE Capability Info (%d B)",
++      logger.debug("Including EUTRA-NR capabilities in UE Capability Info (%d B)",
+                   info->ue_cap_rat_container_list[rat_idx].ue_cap_rat_container.size());
+       rat_idx++;
+     } else if (enquiry.crit_exts.c1().ue_cap_enquiry_r8().ue_cap_request[i] == rat_type_e::nr && has_nr_dc()) {
+       info->ue_cap_rat_container_list[rat_idx] = get_nr_capabilities();
+-      logger.info("Including NR capabilities in UE Capability Info (%d B)",
++      logger.debug("Including NR capabilities in UE Capability Info (%d B)",
+                   info->ue_cap_rat_container_list[rat_idx].ue_cap_rat_container.size());
+       rat_idx++;
+     } else {
+@@ -2337,25 +2343,25 @@ void rrc::handle_ue_info_request(const ue_info_request_r9_s& request)
+ 
+ void rrc::log_rr_config_common()
+ {
+-  logger.info("Set RACH ConfigCommon: NofPreambles=%d, ResponseWindow=%d, ContentionResolutionTimer=%d ms",
++  logger.debug("Set RACH ConfigCommon: NofPreambles=%d, ResponseWindow=%d, ContentionResolutionTimer=%d ms",
+               current_mac_cfg.rach_cfg.nof_preambles,
+               current_mac_cfg.rach_cfg.responseWindowSize,
+               current_mac_cfg.rach_cfg.contentionResolutionTimer);
+ 
+   const srsran::phy_cfg_t& current_pcell = phy_ctrl->current_cell_config()[0];
+-  logger.info("Set PUSCH ConfigCommon: P0_pusch=%f, DMRS cs=%d, delta_ss=%d, N_sb=%d",
++  logger.debug("Set PUSCH ConfigCommon: P0_pusch=%f, DMRS cs=%d, delta_ss=%d, N_sb=%d",
+               current_pcell.ul_cfg.power_ctrl.p0_ue_pusch,
+               current_pcell.ul_cfg.dmrs.cyclic_shift,
+               current_pcell.ul_cfg.dmrs.delta_ss,
+               current_pcell.ul_cfg.hopping.n_sb);
+ 
+-  logger.info("Set PUCCH ConfigCommon: DeltaShift=%d, CyclicShift=%d, N1=%d, NRB=%d",
++  logger.debug("Set PUCCH ConfigCommon: DeltaShift=%d, CyclicShift=%d, N1=%d, NRB=%d",
+               current_pcell.ul_cfg.pucch.delta_pucch_shift,
+               current_pcell.ul_cfg.pucch.N_cs,
+               current_pcell.ul_cfg.pucch.n1_pucch_an_cs[0][0],
+               current_pcell.ul_cfg.pucch.n_rb_2);
+ 
+-  logger.info("Set PRACH ConfigCommon: SeqIdx=%d, HS=%s, FreqOffset=%d, ZC=%d, ConfigIndex=%d",
++  logger.debug("Set PRACH ConfigCommon: SeqIdx=%d, HS=%s, FreqOffset=%d, ZC=%d, ConfigIndex=%d",
+               current_pcell.prach_cfg.root_seq_idx,
+               current_pcell.prach_cfg.hs_flag ? "yes" : "no",
+               current_pcell.prach_cfg.freq_offset,
+@@ -2363,7 +2369,7 @@ void rrc::log_rr_config_common()
+               current_pcell.prach_cfg.config_idx);
+ 
+   if (current_pcell.ul_cfg.srs.configured) {
+-    logger.info("Set SRS ConfigCommon: BW-Configuration=%d, SF-Configuration=%d, Simult-ACKNACK=%s",
++    logger.debug("Set SRS ConfigCommon: BW-Configuration=%d, SF-Configuration=%d, Simult-ACKNACK=%s",
+                 current_pcell.ul_cfg.srs.bw_cfg,
+                 current_pcell.ul_cfg.srs.subframe_config,
+                 current_pcell.ul_cfg.srs.simul_ack ? "yes" : "no");
+@@ -2372,7 +2378,7 @@ void rrc::log_rr_config_common()
+ 
+ void rrc::apply_rr_config_common(rr_cfg_common_s* config, bool send_lower_layers)
+ {
+-  logger.info("Applying MAC/PHY config common");
++  logger.debug("Applying MAC/PHY config common");
+ 
+   if (config->rach_cfg_common_present) {
+     set_mac_cfg_t_rach_cfg_common(&current_mac_cfg, config->rach_cfg_common);
+@@ -2419,23 +2425,23 @@ void rrc::log_phy_config_dedicated()
+ {
+   srsran::phy_cfg_t& current_pcell = phy_ctrl->current_cell_config()[0];
+   if (current_pcell.dl_cfg.cqi_report.periodic_configured) {
+-    logger.info("Set cqi-PUCCH-ResourceIndex=%d, cqi-pmi-ConfigIndex=%d, cqi-FormatIndicatorPeriodic=%d",
++    logger.debug("Set cqi-PUCCH-ResourceIndex=%d, cqi-pmi-ConfigIndex=%d, cqi-FormatIndicatorPeriodic=%d",
+                 current_pcell.ul_cfg.pucch.n_pucch_2,
+                 current_pcell.dl_cfg.cqi_report.pmi_idx,
+                 current_pcell.dl_cfg.cqi_report.periodic_mode);
+   }
+   if (current_pcell.dl_cfg.cqi_report.aperiodic_configured) {
+-    logger.info("Set cqi-ReportModeAperiodic=%d", current_pcell.dl_cfg.cqi_report.aperiodic_mode);
++    logger.debug("Set cqi-ReportModeAperiodic=%d", current_pcell.dl_cfg.cqi_report.aperiodic_mode);
+   }
+ 
+   if (current_pcell.ul_cfg.pucch.sr_configured) {
+-    logger.info("Set PHY config ded: SR-n_pucch=%d, SR-ConfigIndex=%d",
++    logger.debug("Set PHY config ded: SR-n_pucch=%d, SR-ConfigIndex=%d",
+                 current_pcell.ul_cfg.pucch.n_pucch_sr,
+                 current_pcell.ul_cfg.pucch.I_sr);
+   }
+ 
+   if (current_pcell.ul_cfg.srs.configured) {
+-    logger.info("Set PHY config ded: SRS-ConfigIndex=%d, SRS-bw=%d, SRS-Nrcc=%d, SRS-hop=%d, SRS-Ncs=%d",
++    logger.debug("Set PHY config ded: SRS-ConfigIndex=%d, SRS-bw=%d, SRS-Nrcc=%d, SRS-hop=%d, SRS-Ncs=%d",
+                 current_pcell.ul_cfg.srs.I_srs,
+                 current_pcell.ul_cfg.srs.B,
+                 current_pcell.ul_cfg.srs.n_rrc,
+@@ -2450,14 +2456,14 @@ void rrc::set_phy_default()
+   if (phy_ctrl != nullptr) {
+     phy_ctrl->set_phy_to_default();
+   } else {
+-    logger.info("RRC not initialized. Skipping default PHY config.");
++    logger.debug("RRC not initialized. Skipping default PHY config.");
+   }
+ }
+ 
+ // Apply provided PHY config
+ void rrc::apply_phy_config_dedicated(const phys_cfg_ded_s& phy_cnfg, bool is_handover)
+ {
+-  logger.info("Applying PHY config dedicated");
++  logger.debug("Applying PHY config dedicated");
+ 
+   srsran::phy_cfg_t& current_pcell = phy_ctrl->current_cell_config()[0];
+   set_phy_cfg_t_dedicated_cfg(&current_pcell, phy_cnfg);
+@@ -2478,11 +2484,11 @@ void rrc::apply_phy_scell_config(const scell_to_add_mod_r10_s& scell_config, boo
+   uint32_t      earfcn = 0;
+ 
+   if (phy == nullptr) {
+-    logger.info("RRC not initialized. Skipping PHY config.");
++    logger.debug("RRC not initialized. Skipping PHY config.");
+     return;
+   }
+ 
+-  logger.info("Applying PHY config to scell");
++  logger.debug("Applying PHY config to scell");
+ 
+   // Initialise default parameters from primary cell
+   earfcn = meas_cells.serving_cell().get_earfcn();
+@@ -2542,14 +2548,14 @@ void rrc::apply_phy_scell_config(const scell_to_add_mod_r10_s& scell_config, boo
+ 
+ void rrc::log_mac_config_dedicated()
+ {
+-  logger.info("Set MAC main config: harq-MaxReTX=%d, bsr-TimerReTX=%d, bsr-TimerPeriodic=%d, SR %s (dsr-TransMax=%d)",
++  logger.debug("Set MAC main config: harq-MaxReTX=%d, bsr-TimerReTX=%d, bsr-TimerPeriodic=%d, SR %s (dsr-TransMax=%d)",
+               current_mac_cfg.harq_cfg.max_harq_msg3_tx,
+               current_mac_cfg.bsr_cfg.retx_timer,
+               current_mac_cfg.bsr_cfg.periodic_timer,
+               current_mac_cfg.sr_cfg.enabled ? "enabled" : "disabled",
+               current_mac_cfg.sr_cfg.dsr_transmax);
+   if (current_mac_cfg.phr_cfg.enabled) {
+-    logger.info("Set MAC PHR config: periodicPHR-Timer=%d, prohibitPHR-Timer=%d, dl-PathlossChange=%d",
++    logger.debug("Set MAC PHR config: periodicPHR-Timer=%d, prohibitPHR-Timer=%d, dl-PathlossChange=%d",
+                 current_mac_cfg.phr_cfg.periodic_timer,
+                 current_mac_cfg.phr_cfg.prohibit_timer,
+                 current_mac_cfg.phr_cfg.db_pathloss_change);
+@@ -2559,7 +2565,7 @@ void rrc::log_mac_config_dedicated()
+ // 3GPP 36.331 v10 9.2.2 Default MAC main configuration
+ void rrc::apply_mac_config_dedicated_default()
+ {
+-  logger.info("Setting MAC default configuration");
++  logger.debug("Setting MAC default configuration");
+   current_mac_cfg.set_mac_main_cfg_default();
+   mac->set_config(current_mac_cfg);
+   log_mac_config_dedicated();
+@@ -2582,7 +2588,7 @@ bool rrc::apply_rr_config_dedicated(const rr_cfg_ded_s* cnfg, bool is_handover)
+     }
+   }
+ 
+-  logger.info("Applying MAC config dedicated");
++  logger.debug("Applying MAC config dedicated");
+ 
+   if (cnfg->mac_main_cfg_present) {
+     if (cnfg->mac_main_cfg.type() == rr_cfg_ded_s::mac_main_cfg_c_::types::default_value) {
+@@ -2609,7 +2615,7 @@ bool rrc::apply_rr_config_dedicated(const rr_cfg_ded_s* cnfg, bool is_handover)
+     N310 = cnfg->rlf_timers_and_consts_r9->setup().n310_r9.to_number();
+     N311 = cnfg->rlf_timers_and_consts_r9->setup().n311_r9.to_number();
+ 
+-    logger.info("Updated Constants and Timers: N310=%d, N311=%d, t300=%u, t301=%u, t310=%u, t311=%u",
++    logger.debug("Updated Constants and Timers: N310=%d, N311=%d, t300=%u, t301=%u, t310=%u, t311=%u",
+                 N310,
+                 N311,
+                 t300.duration(),
+@@ -2633,7 +2639,7 @@ bool rrc::apply_rr_config_dedicated(const rr_cfg_ded_s* cnfg, bool is_handover)
+ 
+ bool rrc::apply_rr_config_dedicated_on_ho_complete(const rr_cfg_ded_s& cnfg)
+ {
+-  logger.info("Applying MAC/PHY config dedicated on HO complete");
++  logger.debug("Applying MAC/PHY config dedicated on HO complete");
+ 
+   // Apply SR+CQI configuration to PHY
+   if (cnfg.phys_cfg_ded_present) {
+@@ -2813,7 +2819,7 @@ void rrc::add_srb(const srb_to_add_mod_s& srb_cnfg)
+   }
+ 
+   srbs[srb_cnfg.srb_id] = srb_cnfg;
+-  logger.info("Added radio bearer %s", get_rb_name(srb_cnfg.srb_id));
++  logger.debug("Added radio bearer %s", get_rb_name(srb_cnfg.srb_id));
+ }
+ 
+ void rrc::add_drb(const drb_to_add_mod_s& drb_cnfg)
+@@ -2827,7 +2833,7 @@ void rrc::add_drb(const drb_to_add_mod_s& drb_cnfg)
+     lcid = drb_cnfg.lc_ch_id;
+   } else {
+     lcid = srsran::MAX_LTE_SRB_ID + drb_cnfg.drb_id;
+-    logger.warning("LCID not present, using %d", lcid);
++    logger.debug("LCID not present, using %d", lcid);
+   }
+ 
+   // Setup RLC
+@@ -2848,7 +2854,7 @@ void rrc::add_drb(const drb_to_add_mod_s& drb_cnfg)
+     if (drb_cnfg.lc_ch_cfg.ul_specific_params.lc_ch_group_present) {
+       log_chan_group = drb_cnfg.lc_ch_cfg.ul_specific_params.lc_ch_group;
+     } else {
+-      logger.warning("LCG not present, setting to 0");
++      logger.debug("LCG not present, setting to 0");
+     }
+     priority             = drb_cnfg.lc_ch_cfg.ul_specific_params.prio;
+     prioritized_bit_rate = drb_cnfg.lc_ch_cfg.ul_specific_params.prioritised_bit_rate.to_number();
+@@ -2865,13 +2871,13 @@ void rrc::add_drb(const drb_to_add_mod_s& drb_cnfg)
+   stack->add_eps_bearer(eps_bearer_id, srsran::srsran_rat_t::lte, lcid);
+ 
+   drbs[drb_cnfg.drb_id] = drb_cnfg;
+-  logger.info("Added DRB Id %d (LCID=%d)", drb_cnfg.drb_id, lcid);
++  logger.debug("Added DRB Id %d (LCID=%d)", drb_cnfg.drb_id, lcid);
+ }
+ 
+ void rrc::release_drb(uint32_t drb_id)
+ {
+   if (drbs.find(drb_id) != drbs.end()) {
+-    logger.info("Releasing DRB Id %d", drb_id);
++    logger.debug("Releasing DRB Id %d", drb_id);
+ 
+     // remvove RLC and PDCP for this LCID
+     uint32_t lcid = get_lcid_for_drb_id(drb_id);
+@@ -2918,7 +2924,7 @@ uint32_t rrc::get_lcid_for_eps_bearer(const uint32_t& eps_bearer_id)
+     lcid = drb_cnfg.lc_ch_id;
+   } else {
+     lcid = srsran::MAX_LTE_SRB_ID + drb_cnfg.drb_id;
+-    logger.warning("LCID not present, using %d", lcid);
++    logger.debug("LCID not present, using %d", lcid);
+   }
+   return lcid;
+ }
+@@ -2955,7 +2961,7 @@ void rrc::add_mrb(uint32_t lcid, uint32_t port)
+   gw->add_mch_port(lcid, port);
+   rlc->add_bearer_mrb(lcid);
+   mac->mch_start_rx(lcid);
+-  logger.info("Added MRB bearer for lcid:%d", lcid);
++  logger.debug("Added MRB bearer for lcid:%d", lcid);
+ }
+ 
+ // PHY CONFIG DEDICATED Defaults (3GPP 36.331 v10 9.2.4)
+@@ -2964,7 +2970,7 @@ void rrc::set_phy_default_pucch_srs()
+   if (phy_ctrl != nullptr) {
+     phy_ctrl->set_phy_to_default_pucch_srs();
+   } else {
+-    logger.info("RRC not initialized. Skipping default PUCCH/SRS config.");
++    logger.debug("RRC not initialized. Skipping default PUCCH/SRS config.");
+   }
+ 
+   // SR configuration affects to MAC SR too
+@@ -3015,7 +3021,7 @@ asn1::rrc::ue_cap_rat_container_s rrc::get_nr_capabilities()
+ 
+ void rrc::nr_notify_reconfiguration_failure()
+ {
+-  logger.warning("Notify reconfiguration about NR reconfiguration failure");
++  logger.debug("Notify reconfiguration about NR reconfiguration failure");
+   if (conn_recfg_proc.is_busy()) {
+     conn_recfg_proc.trigger(false);
+   }
+@@ -3023,7 +3029,7 @@ void rrc::nr_notify_reconfiguration_failure()
+ //  5.6.13a   NR SCG failure information
+ void rrc::nr_scg_failure_information(const scg_failure_cause_t cause)
+ {
+-  logger.warning("Sending NR SCG failure information with cause %s", to_string(cause));
++  logger.debug("Sending NR SCG failure information with cause %s", to_string(cause));
+   ul_dcch_msg_s           ul_dcch_msg;
+   scg_fail_info_nr_r15_s& scg_fail_info_nr = ul_dcch_msg.msg.set_msg_class_ext().set_c2().set_scg_fail_info_nr_r15();
+   scg_fail_info_nr.crit_exts.set_c1().set_scg_fail_info_nr_r15();
+diff --git a/srsue/src/stack/rrc/rrc_cell.cc b/srsue/src/stack/rrc/rrc_cell.cc
+index 9abc2d68e..e5e931e90 100644
+--- a/srsue/src/stack/rrc/rrc_cell.cc
++++ b/srsue/src/stack/rrc/rrc_cell.cc
+@@ -292,7 +292,7 @@ bool meas_cell_list<T>::add_neighbour_cell_unsorted(unique_meas_cell new_cell)
+   }
+ 
+   if (is_same_cell(serving_cell(), *new_cell)) {
+-    logger.info("Added neighbour cell %s is serving cell", new_cell->to_string().c_str());
++    logger.debug("Added neighbour cell %s is serving cell", new_cell->to_string().c_str());
+     serv_cell = std::move(new_cell);
+     return true;
+   }
+@@ -303,21 +303,21 @@ bool meas_cell_list<T>::add_neighbour_cell_unsorted(unique_meas_cell new_cell)
+     if (std::isnormal(new_cell.get()->get_rsrp())) {
+       existing_cell->set_rsrp(new_cell.get()->get_rsrp());
+     }
+-    logger.info("Updated neighbour cell %s rsrp=%f", new_cell->to_string().c_str(), new_cell.get()->get_rsrp());
++    logger.debug("Updated neighbour cell %s rsrp=%f", new_cell->to_string().c_str(), new_cell.get()->get_rsrp());
+     return true;
+   }
+ 
+   if (neighbour_cells.size() >= MAX_NEIGHBOUR_CELLS) {
+     // If there isn't space, keep the strongest only
+     if (not new_cell->greater(neighbour_cells.back().get())) {
+-      logger.warning("Could not add cell %s: no space in neighbours", new_cell->to_string().c_str());
++      logger.debug("Could not add cell %s: no space in neighbours", new_cell->to_string().c_str());
+       return false;
+     }
+ 
+     rem_last_neighbour();
+   }
+ 
+-  logger.info(
++  logger.debug(
+       "Adding neighbour cell %s, nof_neighbours=%zd", new_cell->to_string().c_str(), neighbour_cells.size() + 1);
+   neighbour_cells.push_back(std::move(new_cell));
+   return true;
+@@ -383,7 +383,7 @@ void meas_cell_list<T>::clean_neighbours()
+ {
+   for (auto it = neighbour_cells.begin(); it != neighbour_cells.end();) {
+     if (it->get()->timer.is_expired()) {
+-      logger.info("Neighbour PCI=%d timed out. Deleting.", (*it)->get_pci());
++      logger.debug("Neighbour PCI=%d timed out. Deleting.", (*it)->get_pci());
+       it = neighbour_cells.erase(it);
+     } else {
+       ++it;
+@@ -446,12 +446,12 @@ int meas_cell_list<T>::set_serving_cell(phy_cell_t phy_cell, bool discard_servin
+   // Set new serving cell
+   std::swap(serv_cell, new_serving_cell);
+   auto& old_serv_cell = new_serving_cell;
+-  logger.info("Setting serving cell %s, nof_neighbours=%zd", serv_cell->to_string().c_str(), nof_neighbours());
++  logger.debug("Setting serving cell %s, nof_neighbours=%zd", serv_cell->to_string().c_str(), nof_neighbours());
+ 
+   // Re-add old serving cell to list of neighbours
+   if (old_serv_cell->is_valid() and not is_same_cell(phy_cell, *old_serv_cell) and not discard_serving) {
+     if (not add_meas_cell(std::move(old_serv_cell))) {
+-      logger.info("Serving cell not added to list of neighbours. Worse than current neighbours");
++      logger.debug("Serving cell not added to list of neighbours. Worse than current neighbours");
+     }
+   }
+   return SRSRAN_SUCCESS;
+@@ -505,7 +505,7 @@ bool meas_cell_list<T>::process_new_cell_meas(const std::vector<phy_meas_t>&
+       neighbour_added |= add_meas_cell(m);
+     }
+ 
+-    logger.info("MEAS:  New measurement %s cell: earfcn=%d, pci=%d, rsrp=%.2f dBm, cfo=%+.1f Hz",
++    logger.debug("MEAS:  New measurement %s cell: earfcn=%d, pci=%d, rsrp=%.2f dBm, cfo=%+.1f Hz",
+                 is_serving_cell ? "serving" : "neighbour",
+                 m.earfcn,
+                 m.pci,
+diff --git a/srsue/src/stack/rrc/rrc_meas.cc b/srsue/src/stack/rrc/rrc_meas.cc
+index 51103dba3..8361b2c6d 100644
+--- a/srsue/src/stack/rrc/rrc_meas.cc
++++ b/srsue/src/stack/rrc/rrc_meas.cc
+@@ -214,7 +214,7 @@ void rrc::rrc_meas::var_meas_report_list::generate_report_eutra(meas_results_s*
+ {
+   meas_cell_eutra* serv_cell = rrc_ptr->get_serving_cell();
+   if (serv_cell == nullptr) {
+-    logger.warning("MEAS:  Serving cell not set when evaluating triggers");
++    logger.debug("MEAS:  Serving cell not set when evaluating triggers");
+     return;
+   }
+ 
+@@ -232,7 +232,7 @@ void rrc::rrc_meas::var_meas_report_list::generate_report_eutra(meas_results_s*
+   for (auto& cell : var_meas.cell_triggered_list) {
+     // report neighbour cells only
+     if (cell.pci == serv_cell->get_pci() && cell.earfcn == serv_cell->get_earfcn()) {
+-      logger.info("MEAS:  skipping serving cell in report neighbour=%d, pci=%d, earfcn=%d",
++      logger.debug("MEAS:  skipping serving cell in report neighbour=%d, pci=%d, earfcn=%d",
+                   neigh_list.size(),
+                   cell.pci,
+                   var_meas.carrier_freq);
+@@ -268,7 +268,7 @@ void rrc::rrc_meas::var_meas_report_list::generate_report_eutra(meas_results_s*
+       rc.meas_result.rsrp_result = rrc_value_to_range(quant_rsrp, rsrp_value);
+       rc.meas_result.rsrq_result = rrc_value_to_range(quant_rsrq, rsrq_value);
+ 
+-      logger.info("MEAS:  Adding to report neighbour=%d, pci=%d, earfcn=%d, rsrp=%+.1f, rsrq=%+.1f",
++      logger.debug("MEAS:  Adding to report neighbour=%d, pci=%d, earfcn=%d, rsrp=%+.1f, rsrq=%+.1f",
+                   neigh_list.size(),
+                   rc.pci,
+                   var_meas.carrier_freq,
+@@ -349,13 +349,13 @@ void rrc::rrc_meas::var_meas_report_list::generate_report_interrat(meas_results_
+               value_to_range_nr(asn1::rrc::thres_nr_r15_c::types_opts::options::nr_sinr_r15, 1.0);
+         }
+       } else {
+-        logger.warning("Report quantity for NR cells not present in measurement config. Sending RSRP anyway.");
++        logger.debug("Report quantity for NR cells not present in measurement config. Sending RSRP anyway.");
+         rc.meas_result_cell_r15.rsrp_result_r15_present = true;
+         rc.meas_result_cell_r15.rsrp_result_r15 =
+             value_to_range_nr(asn1::rrc::thres_nr_r15_c::types_opts::options::nr_rsrp_r15, rsrp_value);
+       }
+ 
+-      logger.info("MEAS:  Adding to report neighbour=%d, pci=%d, earfcn=%d, rsrp=%+.1f, rsrq=%+.1f",
++      logger.debug("MEAS:  Adding to report neighbour=%d, pci=%d, earfcn=%d, rsrp=%+.1f, rsrq=%+.1f",
+                   neigh_list.size(),
+                   rc.pci_r15,
+                   var_meas.carrier_freq,
+@@ -400,7 +400,7 @@ void rrc::rrc_meas::var_meas_report_list::generate_report(const uint32_t measId)
+ {
+   meas_cell_eutra* serv_cell = rrc_ptr->get_serving_cell();
+   if (serv_cell == nullptr) {
+-    logger.warning("MEAS:  Serving cell not set when evaluating triggers");
++    logger.debug("MEAS:  Serving cell not set when evaluating triggers");
+     return;
+   }
+ 
+@@ -413,7 +413,7 @@ void rrc::rrc_meas::var_meas_report_list::generate_report(const uint32_t measId)
+   report->meas_result_pcell.rsrp_result = rrc_value_to_range(quant_rsrp, serv_cell->get_rsrp());
+   report->meas_result_pcell.rsrq_result = rrc_value_to_range(quant_rsrq, serv_cell->get_rsrq());
+ 
+-  logger.info("MEAS:  Generate report MeasId=%d, Pcell rsrp=%f rsrq=%f",
++  logger.debug("MEAS:  Generate report MeasId=%d, Pcell rsrp=%f rsrq=%f",
+               report->meas_id,
+               serv_cell->get_rsrp(),
+               serv_cell->get_rsrq());
+@@ -587,7 +587,7 @@ void rrc::rrc_meas::var_meas_cfg::report_triggers_eutra_removing_trigger(int32_t
+ {
+   meas_cell_eutra* serv_cell = rrc_ptr->get_serving_cell();
+   if (serv_cell == nullptr) {
+-    logger.warning("MEAS:  Serving cell not set when reporting triggers");
++    logger.debug("MEAS:  Serving cell not set when reporting triggers");
+     return;
+   }
+   uint32_t serving_pci = serv_cell->get_pci();
+@@ -939,7 +939,7 @@ void rrc::rrc_meas::var_meas_cfg::eval_triggers_interrat_nr(uint32_t
+       thresh = range_to_value_nr(asn1::rrc::thres_nr_r15_c::types_opts::options::nr_rsrp_r15,
+                                  event_id.event_b1_nr_r15().b1_thres_nr_r15.nr_rsrp_r15());
+     } else {
+-      logger.warning("Other threshold values are not supported yet!");
++      logger.debug("Other threshold values are not supported yet!");
+     }
+ 
+     enter_condition = Mn - hyst > thresh;
+@@ -962,7 +962,7 @@ void rrc::rrc_meas::var_meas_cfg::eval_triggers()
+   meas_cell_eutra* serv_cell = rrc_ptr->get_serving_cell();
+ 
+   if (serv_cell == nullptr) {
+-    logger.warning("MEAS:  Serving cell not set when evaluating triggers");
++    logger.debug("MEAS:  Serving cell not set when evaluating triggers");
+     return;
+   }
+ 
+@@ -1087,7 +1087,7 @@ std::list<meas_obj_to_add_mod_s> rrc::rrc_meas::var_meas_cfg::get_active_objects
+ // Procedure upon handover or reestablishment 5.5.6.1
+ void rrc::rrc_meas::var_meas_cfg::ho_reest_finish(const uint32_t src_earfcn, const uint32_t dst_earfcn)
+ {
+-  logger.info("MEAS:  Actions upon handover and reestablishment, src_earfcn=%d, dst_earfcn=%d", src_earfcn, dst_earfcn);
++  logger.debug("MEAS:  Actions upon handover and reestablishment, src_earfcn=%d, dst_earfcn=%d", src_earfcn, dst_earfcn);
+ 
+   // for each measId included in the measIdList within VarMeasConfig, if the triggerType is set to ‘periodical’, remove
+   // this measId from the measIdList within VarMeasConfig
+@@ -1175,14 +1175,14 @@ void rrc::rrc_meas::var_meas_cfg::measObject_removal(const meas_obj_to_rem_list_
+       auto it = measIdList.begin();
+       while (it != measIdList.end()) {
+         if (it->second.meas_obj_id == l) {
+-          logger.info("MEAS:  Removed measId=%d", it->first);
++          logger.debug("MEAS:  Removed measId=%d", it->first);
+           remove_varmeas_report(it->first); // Remove report before `it` is updated with the next pointer
+           it = measIdList.erase(it);
+         } else {
+           it++;
+         }
+       }
+-      logger.info("MEAS: Removed measObjectId=%d", l);
++      logger.debug("MEAS: Removed measObjectId=%d", l);
+     }
+   }
+ }
+@@ -1250,7 +1250,7 @@ void rrc::rrc_meas::var_meas_cfg::measObject_addmod_eutra(const meas_obj_to_add_
+     }
+   }
+ 
+-  logger.info("MEAS:  %s objectId=%d, carrier_freq=%d, %u cells, %u excluded-listed cells",
++  logger.debug("MEAS:  %s objectId=%d, carrier_freq=%d, %u cells, %u excluded-listed cells",
+               !entry_exists ? "Added" : "Modified",
+               l.meas_obj_id,
+               local_obj.carrier_freq,
+@@ -1305,7 +1305,7 @@ void rrc::rrc_meas::var_meas_cfg::measObject_addmod_nr_r15(const meas_obj_to_add
+     }
+   }
+ 
+-  logger.info("MEAS (NR R15):  %s objectId=%d, carrier_freq=%d, %u excluded-listed cells",
++  logger.debug("MEAS (NR R15):  %s objectId=%d, carrier_freq=%d, %u excluded-listed cells",
+               !entry_exists ? "Added" : "Modified",
+               l.meas_obj_id,
+               local_obj.carrier_freq_r15,
+@@ -1346,14 +1346,14 @@ void rrc::rrc_meas::var_meas_cfg::reportConfig_removal(const report_cfg_to_rem_l
+       auto it = measIdList.begin();
+       while (it != measIdList.end()) {
+         if (it->second.report_cfg_id == l) {
+-          logger.info("MEAS:  Removed measId=%d", it->first);
++          logger.debug("MEAS:  Removed measId=%d", it->first);
+           remove_varmeas_report(it->first); // Remove report before `it` is updated with the next pointer
+           it = measIdList.erase(it);
+         } else {
+           it++;
+         }
+       }
+-      logger.info("MEAS:  Removed reportObjectId=%d", l);
++      logger.debug("MEAS:  Removed reportObjectId=%d", l);
+     }
+   }
+ }
+@@ -1384,7 +1384,7 @@ void rrc::rrc_meas::var_meas_cfg::reportConfig_addmod_eutra(const report_cfg_to_
+     return;
+   }
+   bool entry_exists = reportConfig_addmod_to_reportConfigList(l);
+-  logger.info("MEAS:  %s reportConfig id=%d, event-type=%s, time-to-trigger=%d ms, reportInterval=%d",
++  logger.debug("MEAS:  %s reportConfig id=%d, event-type=%s, time-to-trigger=%d ms, reportInterval=%d",
+               !entry_exists ? "Added" : "Modified",
+               l.report_cfg_id,
+               report_cfg.trigger_type.event().event_id.type().to_string(),
+@@ -1403,7 +1403,7 @@ void rrc::rrc_meas::var_meas_cfg::reportConfig_addmod_interrat(const report_cfg_
+     return;
+   }
+   bool entry_exists = reportConfig_addmod_to_reportConfigList(l);
+-  logger.info("MEAS: Inter RAT %s reportConfig id=%d, event-type=%s, time-to-trigger=%d ms, reportInterval=%d",
++  logger.debug("MEAS: Inter RAT %s reportConfig id=%d, event-type=%s, time-to-trigger=%d ms, reportInterval=%d",
+               !entry_exists ? "Added" : "Modified",
+               l.report_cfg_id,
+               report_cfg.trigger_type.event().event_id.type().to_string(),
+@@ -1486,7 +1486,7 @@ void rrc::rrc_meas::var_meas_cfg::measId_removal(const meas_id_to_rem_list_l& li
+     if (measIdList.count(l)) {
+       measIdList.erase(l);
+       remove_varmeas_report(l);
+-      logger.info("MEAS:  Removed measId=%d", l);
++      logger.debug("MEAS:  Removed measId=%d", l);
+     }
+   }
+ }
+@@ -1510,7 +1510,7 @@ void rrc::rrc_meas::var_meas_cfg::measId_addmod(const meas_id_to_add_mod_list_l&
+     // remove the measurement reporting entry for this measId from the VarMeasReportList, if included
+     remove_varmeas_report(l.meas_id);
+ 
+-    logger.info(
++    logger.debug(
+         "MEAS:  AddMod measId=%d, measObjectId=%d, reportConfigId=%d", l.meas_id, l.meas_obj_id, l.report_cfg_id);
+   }
+ }
+@@ -1535,7 +1535,7 @@ void rrc::rrc_meas::var_meas_cfg::quantity_config(const quant_cfg_s& cfg)
+     filter_a.rsrp = powf(0.5f, (float)k_rsrp / 4.0f);
+     filter_a.rsrq = powf(0.5f, (float)k_rsrq / 4.0f);
+ 
+-    logger.info("MEAS:  Quantity configuration k_rsrp=%d, k_rsrq=%d", k_rsrp, k_rsrq);
++    logger.debug("MEAS:  Quantity configuration k_rsrp=%d, k_rsrq=%d", k_rsrp, k_rsrq);
+ 
+     // for each measId included in the measIdList within VarMeasConfig
+     for (auto& m : measIdList) {
+@@ -1602,7 +1602,7 @@ bool rrc::rrc_meas::var_meas_cfg::parse_meas_config(const meas_cfg_s* cfg, bool
+         ho_reest_finish(src_earfcn, target_earfcn);
+       }
+     } else {
+-      logger.warning("MEAS:  Could not get serving cell earfcn");
++      logger.debug("MEAS:  Could not get serving cell earfcn");
+     }
+   }
+   return true;
+diff --git a/srsue/src/stack/rrc/rrc_procedures.cc b/srsue/src/stack/rrc/rrc_procedures.cc
+index 6b2de8e2b..74ed680e4 100644
+--- a/srsue/src/stack/rrc/rrc_procedures.cc
++++ b/srsue/src/stack/rrc/rrc_procedures.cc
+@@ -30,8 +30,8 @@
+ #include <inttypes.h> // for printing uint64_t
+ 
+ #define Error(fmt, ...) rrc_ptr->logger.error("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+-#define Warning(fmt, ...) rrc_ptr->logger.warning("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+-#define Info(fmt, ...) rrc_ptr->logger.info("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
++#define Warning(fmt, ...) rrc_ptr->logger.debug("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
++#define Info(fmt, ...) rrc_ptr->logger.debug("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+ #define Debug(fmt, ...) rrc_ptr->logger.debug("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+ 
+ namespace srsue {
+@@ -301,9 +301,9 @@ void rrc::si_acquire_proc::then(const srsran::proc_state_t& result)
+   si_acq_timeout.stop();
+ 
+   if (result.is_success()) {
+-    Info("SIB%d acquired successfully", sib_index + 1);
++    //Info("SIB%d acquired successfully", sib_index + 1);
+   } else {
+-    Error("Failed to acquire SIB%d", sib_index + 1);
++    //Error("Failed to acquire SIB%d", sib_index + 1);
+   }
+ }
+ 
+@@ -360,9 +360,9 @@ proc_outcome_t rrc::si_acquire_proc::react(si_acq_timer_expired ev)
+ 
+   // timeout. SI acquire failed
+   if (ev.timer_id == si_acq_timeout.id()) {
+-    Error("Timeout while acquiring SIB%d", sib_index + 1);
++    //Error("Timeout while acquiring SIB%d", sib_index + 1);
+   } else {
+-    Error("Unrecognized timer id");
++    //Error("Unrecognized timer id");
+   }
+   return proc_outcome_t::error;
+ }
+@@ -442,7 +442,7 @@ proc_outcome_t rrc::serving_cell_config_proc::step()
+   uint32_t required_sib = required_sibs[req_idx];
+   if (si_acquire_fut.is_error() or not rrc_ptr->meas_cells.serving_cell().has_sib(required_sib)) {
+     if (required_sib < 2) {
+-      logger.warning("Serving Cell Configuration has failed");
++      logger.debug("Serving Cell Configuration has failed");
+       return proc_outcome_t::error;
+     }
+   }
+@@ -798,7 +798,7 @@ proc_outcome_t rrc::connection_request_proc::init(srsran::establishment_cause_t
+   }
+ 
+   if (rrc_ptr->state != RRC_STATE_IDLE) {
+-    logger.warning("Requested RRC connection establishment while not in IDLE");
++    logger.debug("Requested RRC connection establishment while not in IDLE");
+     return proc_outcome_t::error;
+   }
+ 
+@@ -893,7 +893,7 @@ proc_outcome_t rrc::connection_request_proc::step()
+ void rrc::connection_request_proc::then(const srsran::proc_state_t& result)
+ {
+   if (result.is_error()) {
+-    logger.warning("Could not establish connection. Deallocating dedicatedInfoNAS PDU");
++    logger.debug("Could not establish connection. Deallocating dedicatedInfoNAS PDU");
+     dedicated_info_nas.reset();
+     rrc_ptr->dedicated_info_nas.reset();
+   } else {
+@@ -931,13 +931,13 @@ srsran::proc_outcome_t rrc::connection_request_proc::react(const cell_selection_
+   } else {
+     switch (cs_ret) {
+       case cs_result_t::same_cell:
+-        logger.warning("Did not reselect cell but serving cell is out-of-sync.");
++        logger.debug("Did not reselect cell but serving cell is out-of-sync.");
+         break;
+       case cs_result_t::changed_cell:
+-        logger.warning("Selected a new cell but could not camp on. Setting out-of-sync.");
++        logger.debug("Selected a new cell but could not camp on. Setting out-of-sync.");
+         break;
+       default:
+-        logger.warning("Could not find any suitable cell to connect");
++        logger.debug("Could not find any suitable cell to connect");
+     }
+     return proc_outcome_t::error;
+   }
+@@ -992,7 +992,7 @@ srsran::proc_outcome_t rrc::connection_setup_proc::react(const bool& config_comp
+ void rrc::connection_setup_proc::then(const srsran::proc_state_t& result)
+ {
+   if (result.is_success()) {
+-    rrc_ptr->logger.info("Finished %s successfully", name());
++    rrc_ptr->logger.debug("Finished %s successfully", name());
+     return;
+   }
+ }
+@@ -1116,7 +1116,7 @@ void rrc::connection_reconf_no_ho_proc::then(const srsran::proc_state_t& result)
+   has_5g_nr_reconfig = false;
+ 
+   if (result.is_success()) {
+-    rrc_ptr->logger.info("Finished %s successfully", name());
++    rrc_ptr->logger.debug("Finished %s successfully", name());
+     return;
+   }
+ 
+diff --git a/srsue/src/stack/rrc/test/rrc_meas_test.cc b/srsue/src/stack/rrc/test/rrc_meas_test.cc
+index dac4bea62..2af8ee9e6 100644
+--- a/srsue/src/stack/rrc/test/rrc_meas_test.cc
++++ b/srsue/src/stack/rrc/test/rrc_meas_test.cc
+@@ -500,7 +500,7 @@ int meas_obj_test()
+   rrc_conn_recfg.meas_cfg_present        = true;
+   meas_cfg_s& meas_cfg                   = rrc_conn_recfg.meas_cfg;
+ 
+-  rrc_meas_logger.info("Test1: Remove non-existing measObject, reportConfig and measId");
++  rrc_meas_logger.debug("Test1: Remove non-existing measObject, reportConfig and measId");
+   meas_cfg = {};
+   meas_cfg.meas_id_to_rem_list.push_back(3);
+   meas_cfg.meas_obj_to_rem_list.push_back(3);
+@@ -512,7 +512,7 @@ int meas_obj_test()
+   TESTASSERT(rrctest.send_meas_cfg(rrc_conn_recfg));
+   TESTASSERT(rrctest.phytest.meas_nof_freqs() == 0);
+ 
+-  rrc_meas_logger.info("Test2: Add measId pointing to non-existing measObject or reportConfig");
++  rrc_meas_logger.debug("Test2: Add measId pointing to non-existing measObject or reportConfig");
+   meas_cfg               = {};
+   meas_id_to_add_mod_s m = {};
+   m.meas_obj_id          = 1;
+@@ -525,7 +525,7 @@ int meas_obj_test()
+   TESTASSERT(rrctest.send_meas_cfg(rrc_conn_recfg));
+   TESTASSERT(rrctest.phytest.meas_nof_freqs() == 0);
+ 
+-  rrc_meas_logger.info("Test3: Add meaObject and report of unsupported type. Setup a supported report for later use");
++  rrc_meas_logger.debug("Test3: Add meaObject and report of unsupported type. Setup a supported report for later use");
+   meas_cfg                  = {};
+   meas_obj_to_add_mod_s obj = {};
+   obj.meas_obj.set_meas_obj_utra();
+@@ -554,7 +554,7 @@ int meas_obj_test()
+   TESTASSERT(rrctest.send_meas_cfg(rrc_conn_recfg));
+   TESTASSERT(rrctest.phytest.meas_nof_freqs() == 0);
+ 
+-  rrc_meas_logger.info("Test4: Add 2 measObjects and 2 measId both pointing to the same measObject ");
++  rrc_meas_logger.debug("Test4: Add 2 measObjects and 2 measId both pointing to the same measObject ");
+   meas_cfg = {};
+   for (int i = 0; i < 2; i++) {
+     m               = {};
+@@ -590,7 +590,7 @@ int meas_obj_test()
+   TESTASSERT(rrctest.phytest.meas_freq_started(100));
+   TESTASSERT(rrctest.phytest.meas_nof_cells(100) == 0);
+ 
+-  rrc_meas_logger.info("Test5: Add existing objects and measId. Now add measId for 2nd cell");
++  rrc_meas_logger.debug("Test5: Add existing objects and measId. Now add measId for 2nd cell");
+   meas_cfg        = {};
+   m               = {};
+   m.meas_obj_id   = 2; // same object
+@@ -621,7 +621,7 @@ int meas_obj_test()
+   }
+ 
+   // Reconfigure 2nd object only, we should see 8 cells now
+-  rrc_meas_logger.info("Test6: Add 1 cell to 1st object. Mixed add/mod and removal command.");
++  rrc_meas_logger.debug("Test6: Add 1 cell to 1st object. Mixed add/mod and removal command.");
+   meas_cfg                                  = {};
+   meas_cfg.meas_obj_to_add_mod_list_present = true;
+ 
+@@ -675,7 +675,7 @@ int meas_obj_test()
+   TESTASSERT(rrctest.phytest.meas_cell_started(2, 23));  // was added
+   TESTASSERT(rrctest.phytest.meas_cell_started(2, 24));  // was added
+ 
+-  rrc_meas_logger.info("Test7: PHY finds new neighbours in frequency 1 and 2, check RRC instructs to search them");
++  rrc_meas_logger.debug("Test7: PHY finds new neighbours in frequency 1 and 2, check RRC instructs to search them");
+   std::vector<phy_meas_t> phy_meas = {};
+   phy_meas.push_back({srsran::srsran_rat_t::lte, 0, 0, 0.0f, 1, 31});
+   phy_meas.push_back({srsran::srsran_rat_t::lte, -1, 0, 0.0f, 1, 32});
+@@ -711,13 +711,13 @@ int meas_obj_test()
+   TESTASSERT(rrctest.phytest.meas_cell_started(2, 24));  // was added
+   TESTASSERT(rrctest.phytest.meas_cell_started(2, 31));
+ 
+-  rrc_meas_logger.info("Test8: Simulate a Release (reset() call) make sure resets correctly");
++  rrc_meas_logger.debug("Test8: Simulate a Release (reset() call) make sure resets correctly");
+   rrctest.init();
+   rrctest.run_tti(1);
+   rrctest.connect();
+   rrctest.run_tti(1);
+ 
+-  rrc_meas_logger.info("Test9: Config removal");
++  rrc_meas_logger.debug("Test9: Config removal");
+   meas_cfg = {};
+   meas_cfg.meas_obj_to_rem_list.push_back(1);
+   meas_cfg.meas_obj_to_rem_list.push_back(2);
+@@ -936,20 +936,20 @@ int a1event_report_test(uint32_t                             a1_rsrp_th,
+ 
+   // Entering condition during half timeToTrigger, should not trigger measurement
+   for (int i = 0; i < ttt_iters / 2; i++) {
+-    rrc_meas_logger.info("Report %d/%d enter condition is true", i, ttt_iters / 2);
++    rrc_meas_logger.debug("Report %d/%d enter condition is true", i, ttt_iters / 2);
+     enter_condition(rrctest, event_id, hyst, 0, {1, 2});
+     // Check doesn't generate measurement report
+     TESTASSERT(!rrctest.get_meas_res(meas_res));
+   }
+ 
+-  rrc_meas_logger.info("Report leaving enter condition");
++  rrc_meas_logger.debug("Report leaving enter condition");
+   // Not satisfy entering condition for 1 TTI
+   middle_condition(rrctest, event_id, hyst, 0, {1});
+   TESTASSERT(!rrctest.get_meas_res(meas_res));
+ 
+   // Should go again all timeToTrigger, should not trigger measurement until end
+   for (int i = 0; i < ttt_iters; i++) {
+-    rrc_meas_logger.info("Report %d/%d enter condition is true", i, ttt_iters);
++    rrc_meas_logger.debug("Report %d/%d enter condition is true", i, ttt_iters);
+     enter_condition(rrctest, event_id, hyst, 0, {1, 2});
+     if (i < ttt_iters - 1) {
+       // Check doesn't generate measurement report
+@@ -969,14 +969,14 @@ int a1event_report_test(uint32_t                             a1_rsrp_th,
+     // Trigger again entering condition for the same cell it shouldn't trigger a new report, just keep sending the
+     // periodic reports without restarting counter
+     for (int i = 0; i < ttt_iters; i++) {
+-      rrc_meas_logger.info("Report %d/%d enter condition is true", i, ttt_iters);
++      rrc_meas_logger.debug("Report %d/%d enter condition is true", i, ttt_iters);
+       enter_condition(rrctest, event_id, hyst, 0, {1});
+     }
+     // Do not expect report if timer not expired
+     TESTASSERT(!rrctest.get_meas_res(meas_res));
+     // Wait to generate all reports
+     for (int i = 0; i < report_amount.to_number() - 1; i++) {
+-      rrc_meas_logger.info("Testing report %d/%d", i, report_amount.to_number());
++      rrc_meas_logger.debug("Testing report %d/%d", i, report_amount.to_number());
+       int interval = report_interv.to_number();
+       if (i == 0) {
+         // already stepped these iterations
+@@ -987,7 +987,7 @@ int a1event_report_test(uint32_t                             a1_rsrp_th,
+           // Exit the enter condition in the last one, should still send the last report
+           middle_condition(rrctest, event_id, hyst, 0, {1});
+         } else {
+-          rrc_meas_logger.info("Stepping timer %d/%d", j, interval);
++          rrc_meas_logger.debug("Stepping timer %d/%d", j, interval);
+           rrctest.run_tti(1);
+         }
+         if (j < interval - 1) {
+@@ -1006,7 +1006,7 @@ int a1event_report_test(uint32_t                             a1_rsrp_th,
+     }
+     // Trigger again condition
+     for (int i = 0; i < ttt_iters; i++) {
+-      rrc_meas_logger.info("Report %d/%d enter condition is true", i, ttt_iters);
++      rrc_meas_logger.debug("Report %d/%d enter condition is true", i, ttt_iters);
+       enter_condition(rrctest, event_id, hyst, 0, {1});
+     }
+     // Do not expect report
+@@ -1014,14 +1014,14 @@ int a1event_report_test(uint32_t                             a1_rsrp_th,
+ 
+     // Leaving condition for timeToTrigger
+     for (int i = 0; i < ttt_iters; i++) {
+-      rrc_meas_logger.info("Report %d/%d leaving condition is true", i, ttt_iters);
++      rrc_meas_logger.debug("Report %d/%d leaving condition is true", i, ttt_iters);
+       exit_condition(rrctest, event_id, hyst, 0, {1});
+       // Check doesn't generate measurement report
+       TESTASSERT(!rrctest.get_meas_res(meas_res));
+     }
+     // Trigger again condition
+     for (int i = 0; i < ttt_iters; i++) {
+-      rrc_meas_logger.info("Report %d/%d enter condition is true", i, ttt_iters);
++      rrc_meas_logger.debug("Report %d/%d enter condition is true", i, ttt_iters);
+       enter_condition(rrctest, event_id, hyst, 0, {1});
+     }
+     // Expect report
+@@ -1068,14 +1068,14 @@ int a3event_report_test(uint32_t a3_offset, uint32_t hyst, bool report_on_leave)
+ 
+   meas_results_s meas_res = {};
+ 
+-  rrc_meas_logger.info("Test no-enter condition and no trigger report ");
++  rrc_meas_logger.debug("Test no-enter condition and no trigger report ");
+   no_condition(rrctest, {0}, {1});
+   TESTASSERT(!rrctest.get_meas_res(meas_res));
+ 
+   no_condition(rrctest, {0, 1}, {1, 0});
+   TESTASSERT(!rrctest.get_meas_res(meas_res));
+ 
+-  rrc_meas_logger.info("Test enter condition triggers report. 1 neighbour cell in enter + 1 in exit ");
++  rrc_meas_logger.debug("Test enter condition triggers report. 1 neighbour cell in enter + 1 in exit ");
+   float              offset = 0.5 * event_id.event_a3().a3_offset;
+   std::vector<float> rsrp   = {};
+   rsrp.push_back(-60 + offset + 0.5 * hyst + (float)1e-2);
+@@ -1094,11 +1094,11 @@ int a3event_report_test(uint32_t a3_offset, uint32_t hyst, bool report_on_leave)
+              81 + (hyst + a3_offset) / 2);
+ 
+   // Next iteration in entering state does not trigger another report
+-  rrc_meas_logger.info("Test enter condition for the same cell does not trigger report");
++  rrc_meas_logger.debug("Test enter condition for the same cell does not trigger report");
+   rrctest.run_tti(1);
+   TESTASSERT(!rrctest.get_meas_res(meas_res));
+ 
+-  rrc_meas_logger.info("Test enter condition for different earfcn triggers report");
++  rrc_meas_logger.debug("Test enter condition for different earfcn triggers report");
+   enter_condition(rrctest, event_id, hyst, 2, {1, 3});
+   TESTASSERT(rrctest.get_meas_res(meas_res));
+   TESTASSERT(meas_res.meas_id == 2);
+@@ -1111,7 +1111,7 @@ int a3event_report_test(uint32_t a3_offset, uint32_t hyst, bool report_on_leave)
+              81 + (hyst + a3_offset) / 2);
+ 
+   // if a new cell enters conditions then expect another report
+-  rrc_meas_logger.info("Test a new cell enter condition triggers report");
++  rrc_meas_logger.debug("Test a new cell enter condition triggers report");
+   enter_condition(rrctest, event_id, hyst, 1, {1, 3});
+   TESTASSERT(rrctest.get_meas_res(meas_res));
+   TESTASSERT(meas_res.meas_id == 1);
+@@ -1125,14 +1125,14 @@ int a3event_report_test(uint32_t a3_offset, uint32_t hyst, bool report_on_leave)
+              81 + (hyst + a3_offset) / 2);
+ 
+   // cell pci=0 exists condition
+-  rrc_meas_logger.info("Test exit condition");
++  rrc_meas_logger.debug("Test exit condition");
+   exit_condition(rrctest, event_id, hyst, 1, {1, 0});
+   if (report_on_leave) {
+     TESTASSERT(rrctest.get_meas_res(meas_res));
+   }
+ 
+   // 2 enters again, now expect report again
+-  rrc_meas_logger.info("Test trigger again the cell that exited");
++  rrc_meas_logger.debug("Test trigger again the cell that exited");
+   enter_condition(rrctest, event_id, hyst, 1, {1, 0});
+   TESTASSERT(rrctest.get_meas_res(meas_res));
+   TESTASSERT(meas_res.meas_id == 1);
+diff --git a/srsue/src/stack/rrc/test/rrc_phy_ctrl_test.cc b/srsue/src/stack/rrc/test/rrc_phy_ctrl_test.cc
+index fcea9429c..e1397417a 100644
+--- a/srsue/src/stack/rrc/test/rrc_phy_ctrl_test.cc
++++ b/srsue/src/stack/rrc/test/rrc_phy_ctrl_test.cc
+@@ -210,5 +210,5 @@ int main()
+ 
+   TESTASSERT(srsue::test_phy_ctrl_fsm() == SRSRAN_SUCCESS);
+   TESTASSERT(srsue::test_phy_cell_select_init_error_handling() == SRSRAN_SUCCESS);
+-  test_logger.info("Finished RRC PHY controller test successfully");
++  test_logger.debug("Finished RRC PHY controller test successfully");
+ }
+diff --git a/srsue/src/stack/rrc_nr/rrc_nr.cc b/srsue/src/stack/rrc_nr/rrc_nr.cc
+index f1cc38629..8bb5fa3e8 100644
+--- a/srsue/src/stack/rrc_nr/rrc_nr.cc
++++ b/srsue/src/stack/rrc_nr/rrc_nr.cc
+@@ -141,7 +141,7 @@ const char* rrc_nr::get_rb_name(uint32_t lcid)
+   if (lcid_drb.find(lcid) != lcid_drb.end()) {
+     return get_drb_name(lcid_drb[lcid]);
+   }
+-  logger.warning("Unable to find lcid: %d. Return invalid LCID");
++  logger.debug("Unable to find lcid: %d. Return invalid LCID");
+   return "invalid LCID";
+ }
+ 
+@@ -188,8 +188,8 @@ void rrc_nr::log_rrc_message(const std::string&           source,
+                  msg_type.c_str(),
+                  pdu->N_bytes);
+     logger.debug("Content:%s", json_writer.to_string().c_str());
+-  } else if (logger.info.enabled()) {
+-    logger.info("%s - %s %s (%d B)", source.c_str(), (dir == Rx) ? "Rx" : "Tx", msg_type.c_str(), pdu->N_bytes);
++  } else if (logger.debug.enabled()) {
++    logger.debug("%s - %s %s (%d B)", source.c_str(), (dir == Rx) ? "Rx" : "Tx", msg_type.c_str(), pdu->N_bytes);
+   }
+ }
+ 
+@@ -211,8 +211,8 @@ void rrc_nr::log_rrc_message(const std::string& source,
+                  msg_type.c_str(),
+                  oct.size());
+     logger.debug("Content:%s", json_writer.to_string().c_str());
+-  } else if (logger.info.enabled()) {
+-    logger.info("%s - %s %s (%d B)", source.c_str(), (dir == Rx) ? "Rx" : "Tx", msg_type.c_str(), oct.size());
++  } else if (logger.debug.enabled()) {
++    logger.debug("%s - %s %s (%d B)", source.c_str(), (dir == Rx) ? "Rx" : "Tx", msg_type.c_str(), oct.size());
+   }
+ }
+ 
+@@ -222,7 +222,7 @@ bool rrc_nr::add_lcid_drb(uint32_t lcid, uint32_t drb_id)
+     logger.error("Couldn't add DRB to LCID (%d). DRB %d already exists.", lcid, drb_id);
+     return false;
+   } else {
+-    logger.info("Adding lcid %d and radio bearer ID %d", lcid, drb_id);
++    logger.debug("Adding lcid %d and radio bearer ID %d", lcid, drb_id);
+     lcid_drb[lcid] = nr_drb_id_to_drb(drb_id);
+   }
+   return true;
+@@ -375,7 +375,7 @@ void rrc_nr::decode_pdu_bcch_dlsch(srsran::unique_byte_buffer_t pdu)
+   log_rrc_message("BCCH-DLSCH", Rx, pdu.get(), dlsch_msg, dlsch_msg.msg.c1().type().to_string());
+ 
+   if (dlsch_msg.msg.c1().type() == bcch_dl_sch_msg_type_c::c1_c_::types::sib_type1) {
+-    logger.info("Processing SIB1 (1/1)");
++    logger.debug("Processing SIB1 (1/1)");
+     handle_sib1(dlsch_msg.msg.c1().sib_type1());
+   }
+ }
+@@ -386,34 +386,34 @@ void rrc_nr::set_phy_default_config()
+ 
+   // uses default values provided in 38.311 TS 138 331 V16.6 page 361
+   if (make_phy_beta_offsets({}, &phy_cfg.pusch.beta_offsets) == false) {
+-    logger.warning("Couldn't set default beta_offsets config");
++    logger.debug("Couldn't set default beta_offsets config");
+   }
+ 
+   // no default value provided, asume factor 1.0
+   uci_on_pusch_s uci_on_pusch = {};
+   uci_on_pusch.scaling        = uci_on_pusch_s::scaling_opts::f1;
+   if (make_phy_pusch_scaling(uci_on_pusch, &phy_cfg.pusch.scaling) == false) {
+-    logger.warning("Couldn't set default scaling config");
++    logger.debug("Couldn't set default scaling config");
+   }
+ 
+   // no default value specified, use dynamic
+   phys_cell_group_cfg_s phys_cell_group_cfg   = {};
+   phys_cell_group_cfg.pdsch_harq_ack_codebook = phys_cell_group_cfg_s::pdsch_harq_ack_codebook_opts::dynamic_value;
+   if (make_phy_harq_ack_cfg(phys_cell_group_cfg, &phy_cfg.harq_ack) == false) {
+-    logger.warning("Couldn't set default HARQ ack config");
++    logger.debug("Couldn't set default HARQ ack config");
+   }
+ }
+ 
+ void rrc_nr::handle_sib1(const sib1_s& sib1)
+ {
+   if (meas_cells.serving_cell().has_sib1()) {
+-    logger.info("SIB1 already processed");
++    logger.debug("SIB1 already processed");
+     return;
+   }
+ 
+   meas_cells.serving_cell().set_sib1(sib1);
+ 
+-  logger.info("SIB1 received, CellID=%d", meas_cells.serving_cell().get_cell_id() & 0xfff);
++  logger.debug("SIB1 received, CellID=%d", meas_cells.serving_cell().get_cell_id() & 0xfff);
+ 
+   // clang-format off
+   // unhandled fields:
+@@ -448,7 +448,7 @@ void rrc_nr::handle_sib1(const sib1_s& sib1)
+   N310 = sib1.ue_timers_and_consts.n310.to_number();
+   N311 = sib1.ue_timers_and_consts.n311.to_number();
+ 
+-  logger.info("Set Constants and Timers: N310=%d, N311=%d, t300=%d, t301=%d, t310=%d, t311=%d",
++  logger.debug("Set Constants and Timers: N310=%d, N311=%d, t300=%d, t301=%d, t310=%d, t311=%d",
+               N310,
+               N311,
+               t300.duration(),
+@@ -468,14 +468,14 @@ void rrc_nr::handle_sib1(const sib1_s& sib1)
+           .pdsch_time_domain_alloc_list.size() > 0) {
+     if (not fill_phy_pdsch_cfg_common(sib1.serving_cell_cfg_common.dl_cfg_common.init_dl_bwp.pdsch_cfg_common.setup(),
+                                       &phy_cfg.pdsch)) {
+-      logger.warning("Could not set PDSCH config.");
++      logger.debug("Could not set PDSCH config.");
+     }
+   }
+ 
+   // Apply PUSCH Config Common
+   if (not fill_phy_pusch_cfg_common(sib1.serving_cell_cfg_common.ul_cfg_common.init_ul_bwp.pusch_cfg_common.setup(),
+                                     &phy_cfg.pusch)) {
+-    logger.warning("Could not set PUSCH config.");
++    logger.debug("Could not set PUSCH config.");
+   }
+ 
+   // Apply PUCCH Config Common
+@@ -487,7 +487,7 @@ void rrc_nr::handle_sib1(const sib1_s& sib1)
+                             sib1.serving_cell_cfg_common.tdd_ul_dl_cfg_common_present ? SRSRAN_DUPLEX_MODE_TDD
+                                                                                       : SRSRAN_DUPLEX_MODE_FDD,
+                             &phy_cfg.prach)) {
+-    logger.warning("Could not set phy rach config.");
++    logger.debug("Could not set phy rach config.");
+     return;
+   }
+ 
+@@ -523,7 +523,7 @@ void rrc_nr::handle_sib1(const sib1_s& sib1)
+ 
+   phy_cfg_state = PHY_CFG_STATE_SA_SIB_CFG;
+   if (not phy->set_config(phy_cfg)) {
+-    logger.warning("Could not set phy config.");
++    logger.debug("Could not set phy config.");
+     return;
+   }
+ 
+@@ -539,7 +539,7 @@ void rrc_nr::notify_pdcp_integrity_error(uint32_t lcid) {}
+ int rrc_nr::write_sdu(srsran::unique_byte_buffer_t sdu)
+ {
+   if (state == RRC_NR_STATE_IDLE) {
+-    logger.warning("Received ULInformationTransfer SDU when in IDLE");
++    logger.debug("Received ULInformationTransfer SDU when in IDLE");
+     return SRSRAN_ERROR;
+   }
+   send_ul_info_transfer(std::move(sdu));
+@@ -679,7 +679,7 @@ void rrc_nr::send_ul_dcch_msg(uint32_t lcid, const ul_dcch_msg_s& msg)
+     log_rrc_message(get_rb_name(lcid), Tx, pdu.get(), msg, msg.msg.c1().type().to_string());
+   }
+ 
+-  pdcp->write_sdu(lcid, std::move(pdu));
++  //pdcp->write_sdu(lcid, std::move(pdu));
+ }
+ 
+ void rrc_nr::send_con_setup_complete(srsran::unique_byte_buffer_t nas_msg)
+@@ -791,7 +791,7 @@ int rrc_nr::send_ue_capability_info(const asn1::rrc_nr::ue_cap_enquiry_s& msg)
+           feature_set_ul_per_cc.supported_subcarrier_spacing_ul = subcarrier_spacing_opts::khz30;
+           break;
+         default:
+-          logger.warning("Unsupported subcarrier spacing value");
++          logger.debug("Unsupported subcarrier spacing value");
+       }
+ 
+       ue_cap.feature_sets.feature_sets_dl_per_cc.push_back(feature_set_dl_per_cc);
+@@ -1038,7 +1038,7 @@ void rrc_nr::phy_set_cells_to_meas(uint32_t carrier_freq_r15)
+ 
+ bool rrc_nr::configure_sk_counter(uint16_t sk_counter)
+ {
+-  logger.info("Configure new SK counter %d. Update Key for secondary gnb", sk_counter);
++  logger.debug("Configure new SK counter %d. Update Key for secondary gnb", sk_counter);
+   if (usim->generate_nr_context(sk_counter, &sec_cfg) == false) {
+     return false;
+   }
+@@ -1125,13 +1125,13 @@ bool rrc_nr::apply_mac_cell_group(const mac_cell_group_cfg_s& mac_cell_group_cfg
+           return false;
+         }
+       } else {
+-        logger.warning("Only handling 1 scheduling request index to add");
++        logger.debug("Only handling 1 scheduling request index to add");
+         return false;
+       }
+     }
+ 
+     if (mac_cell_group_cfg.sched_request_cfg.sched_request_to_release_list.size() > 0) {
+-      logger.warning("Not handling sched request to release list");
++      logger.debug("Not handling sched request to release list");
+       return false;
+     }
+   }
+@@ -1154,7 +1154,7 @@ bool rrc_nr::apply_mac_cell_group(const mac_cell_group_cfg_s& mac_cell_group_cfg
+         tag_cfg_nr.tag_id           = mac_cell_group_cfg.tag_cfg.tag_to_add_mod_list[i].tag_id;
+         tag_cfg_nr.time_align_timer = mac_cell_group_cfg.tag_cfg.tag_to_add_mod_list[i].time_align_timer.to_number();
+         if (mac->add_tag_config(tag_cfg_nr) != SRSRAN_SUCCESS) {
+-          logger.warning("Unable to add TAG config with tag_id %d", tag_cfg_nr.tag_id);
++          logger.debug("Unable to add TAG config with tag_id %d", tag_cfg_nr.tag_id);
+           return false;
+         }
+       }
+@@ -1163,7 +1163,7 @@ bool rrc_nr::apply_mac_cell_group(const mac_cell_group_cfg_s& mac_cell_group_cfg
+       for (uint32_t i = 0; i < mac_cell_group_cfg.tag_cfg.tag_to_release_list.size(); i++) {
+         uint32_t tag_id = mac_cell_group_cfg.tag_cfg.tag_to_release_list[i];
+         if (mac->remove_tag_config(tag_id) != SRSRAN_SUCCESS) {
+-          logger.warning("Unable to release TAG config with tag_id %d", tag_id);
++          logger.debug("Unable to release TAG config with tag_id %d", tag_id);
+           return false;
+         }
+       }
+@@ -1174,18 +1174,18 @@ bool rrc_nr::apply_mac_cell_group(const mac_cell_group_cfg_s& mac_cell_group_cfg
+     if (mac_cell_group_cfg.phr_cfg.is_setup()) {
+       phr_cfg_nr_t phr_cfg_nr;
+       if (make_mac_phr_cfg_t(mac_cell_group_cfg.phr_cfg.setup(), &phr_cfg_nr) != true) {
+-        logger.warning("Unable to build PHR config");
++        logger.debug("Unable to build PHR config");
+         return false;
+       }
+       if (mac->set_config(phr_cfg_nr) != SRSRAN_SUCCESS) {
+-        logger.warning("Unable to set PHR config");
++        logger.debug("Unable to set PHR config");
+         return false;
+       }
+     }
+   }
+ 
+   if (mac_cell_group_cfg.skip_ul_tx_dynamic) {
+-    logger.warning("Not handling phr cfg in skip_ul_tx_dynamic cell group config");
++    logger.debug("Not handling phr cfg in skip_ul_tx_dynamic cell group config");
+   }
+   return true;
+ }
+@@ -1199,12 +1199,12 @@ bool rrc_nr::apply_sp_cell_init_dl_pdcch(const asn1::rrc_nr::pdcch_cfg_s& pdcch_
+         phy_cfg.pdcch.search_space[search_space.id]         = search_space;
+         phy_cfg.pdcch.search_space_present[search_space.id] = true;
+       } else {
+-        logger.warning("Warning while building search_space structure id=%d", i);
++        logger.debug("Warning while building search_space structure id=%d", i);
+         return false;
+       }
+     }
+   } else {
+-    logger.warning("Option search_spaces_to_add_mod_list not present");
++    logger.debug("Option search_spaces_to_add_mod_list not present");
+     return false;
+   }
+   if (pdcch_cfg.ctrl_res_set_to_add_mod_list.size() > 0) {
+@@ -1214,12 +1214,12 @@ bool rrc_nr::apply_sp_cell_init_dl_pdcch(const asn1::rrc_nr::pdcch_cfg_s& pdcch_
+         phy_cfg.pdcch.coreset[coreset.id]         = coreset;
+         phy_cfg.pdcch.coreset_present[coreset.id] = true;
+       } else {
+-        logger.warning("Warning while building coreset structure");
++        logger.debug("Warning while building coreset structure");
+         return false;
+       }
+     }
+   } else {
+-    logger.warning("Option ctrl_res_set_to_add_mod_list not present");
++    logger.debug("Option ctrl_res_set_to_add_mod_list not present");
+   }
+   return true;
+ }
+@@ -1235,7 +1235,7 @@ bool rrc_nr::apply_sp_cell_init_dl_pdsch(const asn1::rrc_nr::pdsch_cfg_s& pdsch_
+         phy_cfg.pdsch.mcs_table = srsran_mcs_table_qam64LowSE;
+         break;
+       case pdsch_cfg_s::mcs_table_opts::nulltype:
+-        logger.warning("Warning while selecting pdsch mcs_table");
++        logger.debug("Warning while selecting pdsch mcs_table");
+         return false;
+     }
+   } else {
+@@ -1249,11 +1249,11 @@ bool rrc_nr::apply_sp_cell_init_dl_pdsch(const asn1::rrc_nr::pdsch_cfg_s& pdsch_
+       phy_cfg.pdsch.dmrs_typeA.additional_pos = srsran_dmrs_sch_add_pos_2;
+       phy_cfg.pdsch.dmrs_typeA.present        = true;
+     } else {
+-      logger.warning("Option dmrs_dl_for_pdsch_map_type_a not of type setup");
++      logger.debug("Option dmrs_dl_for_pdsch_map_type_a not of type setup");
+       return false;
+     }
+   } else {
+-    logger.warning("Option dmrs_dl_for_pdsch_map_type_a not present");
++    logger.debug("Option dmrs_dl_for_pdsch_map_type_a not present");
+     return false;
+   }
+ 
+@@ -1269,7 +1269,7 @@ bool rrc_nr::apply_sp_cell_init_dl_pdsch(const asn1::rrc_nr::pdsch_cfg_s& pdsch_
+         // temporally store csi_rs_zp_res
+         csi_rs_zp_res[zp_csi_rs_resource.id] = zp_csi_rs_resource;
+       } else {
+-        logger.warning("Warning while building zp_csi_rs resource");
++        logger.debug("Warning while building zp_csi_rs resource");
+         return false;
+       }
+     }
+@@ -1278,7 +1278,7 @@ bool rrc_nr::apply_sp_cell_init_dl_pdsch(const asn1::rrc_nr::pdsch_cfg_s& pdsch_
+   if (pdsch_cfg.p_zp_csi_rs_res_set_present) {
+     // check if resources have been processed
+     if (pdsch_cfg.zp_csi_rs_res_to_add_mod_list.size() == 0) {
+-      logger.warning("Can't build ZP-CSI config, option zp_csi_rs_res_to_add_mod_list not present");
++      logger.debug("Can't build ZP-CSI config, option zp_csi_rs_res_to_add_mod_list not present");
+       return false;
+     }
+     if (pdsch_cfg.p_zp_csi_rs_res_set.type() == setup_release_c<zp_csi_rs_res_set_s>::types_opts::setup) {
+@@ -1286,14 +1286,14 @@ bool rrc_nr::apply_sp_cell_init_dl_pdsch(const asn1::rrc_nr::pdsch_cfg_s& pdsch_
+         uint8_t res = pdsch_cfg.p_zp_csi_rs_res_set.setup().zp_csi_rs_res_id_list[i];
+         // use temporally stored values to assign
+         if (csi_rs_zp_res.find(res) == csi_rs_zp_res.end()) {
+-          logger.warning("Can not find p_zp_csi_rs_res in temporally stored csi_rs_zp_res");
++          logger.debug("Can not find p_zp_csi_rs_res in temporally stored csi_rs_zp_res");
+           return false;
+         }
+         phy_cfg.pdsch.p_zp_csi_rs_set.data[i] = csi_rs_zp_res[res];
+         phy_cfg.pdsch.p_zp_csi_rs_set.count += 1;
+       }
+     } else {
+-      logger.warning("Option p_zp_csi_rs_res_set not of type setup");
++      logger.debug("Option p_zp_csi_rs_res_set not of type setup");
+       return false;
+     }
+   }
+@@ -1307,7 +1307,7 @@ bool rrc_nr::apply_res_csi_report_cfg(const asn1::rrc_nr::csi_report_cfg_s& csi_
+   if (make_phy_csi_report(csi_report_cfg, &srsran_csi_hl_report_cfg) == true) {
+     phy_cfg.csi.reports[report_cfg_id] = srsran_csi_hl_report_cfg;
+   } else {
+-    logger.warning("Warning while building report structure");
++    logger.debug("Warning while building report structure");
+     return false;
+   }
+   if (csi_report_cfg.report_cfg_type.type() == csi_report_cfg_s::report_cfg_type_c_::types_opts::options::periodic) {
+@@ -1322,7 +1322,7 @@ bool rrc_nr::apply_res_csi_report_cfg(const asn1::rrc_nr::csi_report_cfg_s& csi_
+         return false;
+       }
+     } else {
+-      logger.warning("List size to small: pucch_csi_res_list.size() < 0");
++      logger.debug("List size to small: pucch_csi_res_list.size() < 0");
+       return false;
+     }
+   }
+@@ -1343,7 +1343,7 @@ bool rrc_nr::apply_csi_meas_cfg(const asn1::rrc_nr::csi_meas_cfg_s& csi_meas_cfg
+       // temporally store csi_rs_zp_res
+       csi_rs_nzp_res[csi_rs_nzp_resource.id] = csi_rs_nzp_resource;
+     } else {
+-      logger.warning("Warning while building phy_nzp_csi_rs resource");
++      logger.debug("Warning while building phy_nzp_csi_rs resource");
+       return false;
+     }
+   }
+@@ -1354,7 +1354,7 @@ bool rrc_nr::apply_csi_meas_cfg(const asn1::rrc_nr::csi_meas_cfg_s& csi_meas_cfg
+       uint8_t res = csi_meas_cfg.nzp_csi_rs_res_set_to_add_mod_list[i].nzp_csi_rs_res[j];
+       // use temporally stored values to assign
+       if (csi_rs_nzp_res.find(res) == csi_rs_nzp_res.end()) {
+-        logger.warning("Can not find nzp_csi_rs_res in temporally stored csi_rs_nzp_res");
++        logger.debug("Can not find nzp_csi_rs_res in temporally stored csi_rs_nzp_res");
+         return false;
+       }
+       phy_cfg.pdsch.nzp_csi_rs_sets[set_id].data[j] = csi_rs_nzp_res[res];
+@@ -1372,11 +1372,11 @@ bool rrc_nr::apply_dl_common_cfg(const asn1::rrc_nr::dl_cfg_common_s& dl_cfg_com
+ {
+   if (dl_cfg_common.freq_info_dl_present) {
+     if (make_phy_carrier_cfg(dl_cfg_common.freq_info_dl, &phy_cfg.carrier) == false) {
+-      logger.warning("Warning while making carrier phy config");
++      logger.debug("Warning while making carrier phy config");
+       return false;
+     }
+   } else {
+-    logger.warning("Option freq_info_dl not present, S-UL not supported.");
++    logger.debug("Option freq_info_dl not present, S-UL not supported.");
+     return false;
+   }
+   if (dl_cfg_common.init_dl_bwp_present) {
+@@ -1408,7 +1408,7 @@ bool rrc_nr::apply_dl_common_cfg(const asn1::rrc_nr::dl_cfg_common_s& dl_cfg_com
+                                   pdcch_scs,
+                                   pdcch_cfg_common.ctrl_res_set_zero,
+                                   &coreset0) < SRSASN_SUCCESS) {
+-            logger.warning("Not possible to create CORESET Zero (ssb_scs=%s, pdcch_scs=%s, idx=%d)",
++            logger.debug("Not possible to create CORESET Zero (ssb_scs=%s, pdcch_scs=%s, idx=%d)",
+                            srsran_subcarrier_spacing_to_str(ssb_scs),
+                            srsran_subcarrier_spacing_to_str(pdcch_scs),
+                            pdcch_cfg_common.ctrl_res_set_zero);
+@@ -1426,11 +1426,11 @@ bool rrc_nr::apply_dl_common_cfg(const asn1::rrc_nr::dl_cfg_common_s& dl_cfg_com
+             phy_cfg.pdcch.coreset[coreset.id]         = coreset;
+             phy_cfg.pdcch.coreset_present[coreset.id] = true;
+           } else {
+-            logger.warning("Warning while building coreset structure");
++            logger.debug("Warning while building coreset structure");
+             return false;
+           }
+         } else {
+-          logger.warning("Option common_ctrl_res_set not present");
++          logger.debug("Option common_ctrl_res_set not present");
+           return false;
+         }
+         if (pdcch_cfg_common.common_search_space_list.size() > 0) {
+@@ -1440,12 +1440,12 @@ bool rrc_nr::apply_dl_common_cfg(const asn1::rrc_nr::dl_cfg_common_s& dl_cfg_com
+               phy_cfg.pdcch.search_space[search_space.id]         = search_space;
+               phy_cfg.pdcch.search_space_present[search_space.id] = true;
+             } else {
+-              logger.warning("Warning while building search_space structure for common search space");
++              logger.debug("Warning while building search_space structure for common search space");
+               return false;
+             }
+           }
+         } else {
+-          logger.warning("Option common_search_space_list not present");
++          logger.debug("Option common_search_space_list not present");
+           return false;
+         }
+         if (pdcch_cfg_common.ra_search_space_present) {
+@@ -1454,19 +1454,19 @@ bool rrc_nr::apply_dl_common_cfg(const asn1::rrc_nr::dl_cfg_common_s& dl_cfg_com
+             phy_cfg.pdcch.ra_search_space_present = true;
+             phy_cfg.pdcch.ra_search_space.type    = srsran_search_space_type_common_1;
+           } else {
+-            logger.warning("Search space %d not presenet for random access search space",
++            logger.debug("Search space %d not presenet for random access search space",
+                            pdcch_cfg_common.ra_search_space);
+           }
+         } else {
+-          logger.warning("Option ra_search_space not present");
++          logger.debug("Option ra_search_space not present");
+           return false;
+         }
+       } else {
+-        logger.warning("Option pdsch_cfg_common not of type setup");
++        logger.debug("Option pdsch_cfg_common not of type setup");
+         return false;
+       }
+     } else {
+-      logger.warning("Option pdsch_cfg_common not present");
++      logger.debug("Option pdsch_cfg_common not present");
+       return false;
+     }
+     if (dl_cfg_common.init_dl_bwp.pdsch_cfg_common_present) {
+@@ -1479,24 +1479,24 @@ bool rrc_nr::apply_dl_common_cfg(const asn1::rrc_nr::dl_cfg_common_s& dl_cfg_com
+               phy_cfg.pdsch.common_time_ra[i]  = common_time_ra;
+               phy_cfg.pdsch.nof_common_time_ra = i + 1;
+             } else {
+-              logger.warning("Warning while building common_time_ra structure");
++              logger.debug("Warning while building common_time_ra structure");
+               return false;
+             }
+           }
+         } else {
+-          logger.warning("Option pdsch_time_domain_alloc_list not present");
++          logger.debug("Option pdsch_time_domain_alloc_list not present");
+           return false;
+         }
+       } else {
+-        logger.warning("Option pdsch_cfg_common not of type setup");
++        logger.debug("Option pdsch_cfg_common not of type setup");
+         return false;
+       }
+     } else {
+-      logger.warning("Option pdsch_cfg_common not present");
++      logger.debug("Option pdsch_cfg_common not present");
+       return false;
+     }
+   } else {
+-    logger.warning("Option init_dl_bwp not present");
++    logger.debug("Option init_dl_bwp not present");
+     return false;
+   }
+   return true;
+@@ -1521,16 +1521,16 @@ bool rrc_nr::apply_ul_common_cfg(const asn1::rrc_nr::ul_cfg_common_s& ul_cfg_com
+         // Make the RACH configuration for PHY
+         if (not make_phy_rach_cfg(
+                 ul_cfg_common.init_ul_bwp.rach_cfg_common.setup(), SRSRAN_DUPLEX_MODE_FDD, &phy_cfg.prach)) {
+-          logger.warning("Error parsing rach_cfg_common");
++          logger.debug("Error parsing rach_cfg_common");
+           return false;
+         }
+ 
+       } else {
+-        logger.warning("Option rach_cfg_common not of type setup");
++        logger.debug("Option rach_cfg_common not of type setup");
+         return false;
+       }
+     } else {
+-      logger.warning("Option rach_cfg_common not present");
++      logger.debug("Option rach_cfg_common not present");
+       return false;
+     }
+     if (ul_cfg_common.init_ul_bwp.pusch_cfg_common_present) {
+@@ -1546,34 +1546,34 @@ bool rrc_nr::apply_ul_common_cfg(const asn1::rrc_nr::ul_cfg_common_s& ul_cfg_com
+               phy_cfg.pusch.common_time_ra[i]  = common_time_ra;
+               phy_cfg.pusch.nof_common_time_ra = i + 1;
+             } else {
+-              logger.warning("Warning while building common_time_ra structure");
++              logger.debug("Warning while building common_time_ra structure");
+             }
+           }
+         } else {
+-          logger.warning("Option pusch_time_domain_alloc_list not present");
++          logger.debug("Option pusch_time_domain_alloc_list not present");
+           return false;
+         }
+       } else {
+-        logger.warning("Option pusch_cfg_common not of type setup");
++        logger.debug("Option pusch_cfg_common not of type setup");
+         return false;
+       }
+     } else {
+-      logger.warning("Option pusch_cfg_common not present");
++      logger.debug("Option pusch_cfg_common not present");
+       return false;
+     }
+     if (ul_cfg_common.init_ul_bwp.pucch_cfg_common_present) {
+       if (ul_cfg_common.init_ul_bwp.pucch_cfg_common.type() == setup_release_c<pucch_cfg_common_s>::types_opts::setup) {
+-        logger.info("PUCCH cfg common setup not handled");
++        logger.debug("PUCCH cfg common setup not handled");
+       } else {
+-        logger.warning("Option pucch_cfg_common not of type setup");
++        logger.debug("Option pucch_cfg_common not of type setup");
+         return false;
+       }
+     } else {
+-      logger.warning("Option pucch_cfg_common not present");
++      logger.debug("Option pucch_cfg_common not present");
+       return false;
+     }
+   } else {
+-    logger.warning("Option init_ul_bwp in spCellConfigCommon not present");
++    logger.debug("Option init_ul_bwp in spCellConfigCommon not present");
+     return false;
+   }
+   return true;
+@@ -1586,11 +1586,11 @@ bool rrc_nr::apply_sp_cell_ded_ul_pucch(const asn1::rrc_nr::pucch_cfg_s& pucch_c
+   if (pucch_cfg.format2_present && pucch_cfg.format2.type() == setup_release_c<pucch_format_cfg_s>::types::setup) {
+     if (pucch_cfg.format2.setup().max_code_rate_present) {
+       if (make_phy_max_code_rate(pucch_cfg.format2.setup(), &format_2_max_code_rate) == false) {
+-        logger.warning("Warning while building format_2_max_code_rate");
++        logger.debug("Warning while building format_2_max_code_rate");
+       }
+     }
+   } else {
+-    logger.warning("Option format2 not present or not of type setup");
++    logger.debug("Option format2 not present or not of type setup");
+     return false;
+   }
+ 
+@@ -1600,12 +1600,12 @@ bool rrc_nr::apply_sp_cell_ded_ul_pucch(const asn1::rrc_nr::pucch_cfg_s& pucch_c
+       uint32_t res_id = pucch_cfg.res_to_add_mod_list[i].pucch_res_id;
+       pucch_res_list.insert(res_id, {});
+       if (!make_phy_res_config(pucch_cfg.res_to_add_mod_list[i], format_2_max_code_rate, &pucch_res_list[res_id])) {
+-        logger.warning("Warning while building pucch_nr_resource structure");
++        logger.debug("Warning while building pucch_nr_resource structure");
+         return false;
+       }
+     }
+   } else {
+-    logger.warning("Option res_to_add_mod_list not present");
++    logger.debug("Option res_to_add_mod_list not present");
+     return false;
+   }
+ 
+@@ -1641,23 +1641,23 @@ bool rrc_nr::apply_sp_cell_ded_ul_pucch(const asn1::rrc_nr::pucch_cfg_s& pucch_c
+           if (pucch_res_list.contains(pucch_res_id)) {
+             phy_cfg.pucch.sr_resources[sr_res_id].resource = pucch_res_list[pucch_res_id];
+           } else {
+-            logger.warning("Warning SR (%d) PUCCH resource is invalid (%d)", sr_res_id, pucch_res_id);
++            logger.debug("Warning SR (%d) PUCCH resource is invalid (%d)", sr_res_id, pucch_res_id);
+             phy_cfg.pucch.sr_resources[sr_res_id].configured = false;
+             return false;
+           }
+         } else {
+-          logger.warning("Warning SR resource is present but no PUCCH resource is assigned to it");
++          logger.debug("Warning SR resource is present but no PUCCH resource is assigned to it");
+           phy_cfg.pucch.sr_resources[sr_res_id].configured = false;
+           return false;
+         }
+ 
+       } else {
+-        logger.warning("Warning while building srsran_pucch_nr_sr_resource structure");
++        logger.debug("Warning while building srsran_pucch_nr_sr_resource structure");
+         return false;
+       }
+     }
+   } else {
+-    logger.warning("Option sched_request_res_to_add_mod_list not present");
++    logger.debug("Option sched_request_res_to_add_mod_list not present");
+     return false;
+   }
+ 
+@@ -1667,7 +1667,7 @@ bool rrc_nr::apply_sp_cell_ded_ul_pucch(const asn1::rrc_nr::pucch_cfg_s& pucch_c
+     }
+     phy_cfg.harq_ack.nof_dl_data_to_ul_ack = pucch_cfg.dl_data_to_ul_ack.size();
+   } else {
+-    logger.warning("Option dl_data_to_ul_ack not present");
++    logger.debug("Option dl_data_to_ul_ack not present");
+     return false;
+   }
+ 
+@@ -1685,7 +1685,7 @@ bool rrc_nr::apply_sp_cell_ded_ul_pusch(const asn1::rrc_nr::pusch_cfg_s& pusch_c
+         phy_cfg.pusch.mcs_table = srsran_mcs_table_qam64LowSE;
+         break;
+       case pusch_cfg_s::mcs_table_opts::nulltype:
+-        logger.warning("Warning while selecting pusch mcs_table");
++        logger.debug("Warning while selecting pusch mcs_table");
+         return false;
+     }
+   } else {
+@@ -1704,11 +1704,11 @@ bool rrc_nr::apply_sp_cell_ded_ul_pusch(const asn1::rrc_nr::pusch_cfg_s& pusch_c
+       phy_cfg.pusch.dmrs_typeA.additional_pos = srsran_dmrs_sch_add_pos_2;
+       phy_cfg.pusch.dmrs_typeA.present        = true;
+     } else {
+-      logger.warning("Option dmrs_ul_for_pusch_map_type_a not of type setup");
++      logger.debug("Option dmrs_ul_for_pusch_map_type_a not of type setup");
+       return false;
+     }
+   } else {
+-    logger.warning("Option dmrs_ul_for_pusch_map_type_a not present");
++    logger.debug("Option dmrs_ul_for_pusch_map_type_a not present");
+     return false;
+   }
+   if (pusch_cfg.uci_on_pusch_present) {
+@@ -1720,29 +1720,29 @@ bool rrc_nr::apply_sp_cell_ded_ul_pusch(const asn1::rrc_nr::pusch_cfg_s& pusch_c
+           if (make_phy_beta_offsets(pusch_cfg.uci_on_pusch.setup().beta_offsets.semi_static(), &beta_offsets) == true) {
+             phy_cfg.pusch.beta_offsets = beta_offsets;
+           } else {
+-            logger.warning("Warning while building beta_offsets structure");
++            logger.debug("Warning while building beta_offsets structure");
+             return false;
+           }
+         } else {
+-          logger.warning("Option beta_offsets not of type semi_static");
++          logger.debug("Option beta_offsets not of type semi_static");
+           return false;
+         }
+         if (pusch_cfg.uci_on_pusch_present) {
+           if (make_phy_pusch_scaling(pusch_cfg.uci_on_pusch.setup(), &phy_cfg.pusch.scaling) == false) {
+-            logger.warning("Warning while building scaling structure");
++            logger.debug("Warning while building scaling structure");
+             return false;
+           }
+         }
+       } else {
+-        logger.warning("Option beta_offsets not present");
++        logger.debug("Option beta_offsets not present");
+         return false;
+       }
+     } else {
+-      logger.warning("Option uci_on_pusch of type setup");
++      logger.debug("Option uci_on_pusch of type setup");
+       return false;
+     }
+   } else {
+-    logger.warning("Option uci_on_pusch not present");
++    logger.debug("Option uci_on_pusch not present");
+     return false;
+   }
+   return true;
+@@ -1768,7 +1768,7 @@ bool rrc_nr::update_sp_cell_cfg(const sp_cell_cfg_s& sp_cell_cfg)
+         phy_cfg.carrier.pci             = recfg_with_sync.sp_cell_cfg_common.pci;
+         phy_cfg.carrier.max_mimo_layers = 1; // TODO: flatten
+       } else {
+-        logger.warning("Option PCI not present");
++        logger.debug("Option PCI not present");
+         return false;
+       }
+       // Read essential DL carrier settings
+@@ -1777,7 +1777,7 @@ bool rrc_nr::update_sp_cell_cfg(const sp_cell_cfg_s& sp_cell_cfg)
+           return false;
+         }
+       } else {
+-        logger.warning("Secondary primary cell dl cfg common not present");
++        logger.debug("Secondary primary cell dl cfg common not present");
+         return false;
+       }
+       if (recfg_with_sync.sp_cell_cfg_common.ul_cfg_common_present) {
+@@ -1785,7 +1785,7 @@ bool rrc_nr::update_sp_cell_cfg(const sp_cell_cfg_s& sp_cell_cfg)
+           return false;
+         }
+       } else {
+-        logger.warning("Secondary primary cell ul cfg common not present");
++        logger.debug("Secondary primary cell ul cfg common not present");
+         return false;
+       }
+       // Build SSB config
+@@ -1793,7 +1793,7 @@ bool rrc_nr::update_sp_cell_cfg(const sp_cell_cfg_s& sp_cell_cfg)
+       if (make_phy_ssb_cfg(phy_cfg.carrier, recfg_with_sync.sp_cell_cfg_common, &ssb_cfg) == true) {
+         phy_cfg.ssb = ssb_cfg;
+       } else {
+-        logger.warning("Warning while building SSB config structure");
++        logger.debug("Warning while building SSB config structure");
+         return false;
+       }
+       if (recfg_with_sync.sp_cell_cfg_common.tdd_ul_dl_cfg_common_present) {
+@@ -1803,7 +1803,7 @@ bool rrc_nr::update_sp_cell_cfg(const sp_cell_cfg_s& sp_cell_cfg)
+           phy_cfg.duplex                      = duplex;
+           phy_cfg.prach.tdd_config.configured = true;
+         } else {
+-          logger.warning("Warning while building duplex structure");
++          logger.debug("Warning while building duplex structure");
+           return false;
+         }
+       } else {
+@@ -1826,11 +1826,11 @@ bool rrc_nr::update_sp_cell_cfg(const sp_cell_cfg_s& sp_cell_cfg)
+             return false;
+           }
+         } else {
+-          logger.warning("Option pdcch_cfg not of type setup");
++          logger.debug("Option pdcch_cfg not of type setup");
+           return false;
+         }
+       } else {
+-        logger.warning("Option pdcch_cfg not present");
++        logger.debug("Option pdcch_cfg not present");
+         return false;
+       }
+       if (sp_cell_cfg.sp_cell_cfg_ded.init_dl_bwp.pdsch_cfg_present) {
+@@ -1841,15 +1841,15 @@ bool rrc_nr::update_sp_cell_cfg(const sp_cell_cfg_s& sp_cell_cfg)
+             return false;
+           };
+         } else {
+-          logger.warning("Option pdsch_cfg_cfg not of type setup");
++          logger.debug("Option pdsch_cfg_cfg not of type setup");
+           return false;
+         }
+       } else {
+-        logger.warning("Option pdsch_cfg not present");
++        logger.debug("Option pdsch_cfg not present");
+         return false;
+       }
+     } else {
+-      logger.warning("Option init_dl_bwp not present");
++      logger.debug("Option init_dl_bwp not present");
+       return false;
+     }
+     // Dedicated Uplink
+@@ -1862,11 +1862,11 @@ bool rrc_nr::update_sp_cell_cfg(const sp_cell_cfg_s& sp_cell_cfg)
+               return false;
+             }
+           } else {
+-            logger.warning("Option pucch_cfg not of type setup");
++            logger.debug("Option pucch_cfg not of type setup");
+             return false;
+           }
+         } else {
+-          logger.warning("Option pucch_cfg for initial UL BWP in spCellConfigDedicated not present");
++          logger.debug("Option pucch_cfg for initial UL BWP in spCellConfigDedicated not present");
+           return false;
+         }
+         if (sp_cell_cfg.sp_cell_cfg_ded.ul_cfg.init_ul_bwp.pusch_cfg_present) {
+@@ -1876,19 +1876,19 @@ bool rrc_nr::update_sp_cell_cfg(const sp_cell_cfg_s& sp_cell_cfg)
+               return false;
+             }
+           } else {
+-            logger.warning("Option pusch_cfg not of type setup");
++            logger.debug("Option pusch_cfg not of type setup");
+             return false;
+           }
+         } else {
+-          logger.warning("Option pusch_cfg in spCellConfigDedicated not present");
++          logger.debug("Option pusch_cfg in spCellConfigDedicated not present");
+           return false;
+         }
+       } else {
+-        logger.warning("Option init_ul_bwp in spCellConfigDedicated not present");
++        logger.debug("Option init_ul_bwp in spCellConfigDedicated not present");
+         return false;
+       }
+     } else {
+-      logger.warning("Option ul_cfg in spCellConfigDedicated not present");
++      logger.debug("Option ul_cfg in spCellConfigDedicated not present");
+       return false;
+     }
+ 
+@@ -1898,7 +1898,7 @@ bool rrc_nr::update_sp_cell_cfg(const sp_cell_cfg_s& sp_cell_cfg)
+         dl_harq_cfg_nr_t dl_harq_cfg_nr;
+         if (make_mac_dl_harq_cfg_nr_t(sp_cell_cfg.sp_cell_cfg_ded.pdsch_serving_cell_cfg.setup(), &dl_harq_cfg_nr) ==
+             false) {
+-          logger.warning("Failed to make dl_harq_cfg_nr config");
++          logger.debug("Failed to make dl_harq_cfg_nr config");
+           return false;
+         }
+         mac->set_config(dl_harq_cfg_nr);
+@@ -1913,15 +1913,15 @@ bool rrc_nr::update_sp_cell_cfg(const sp_cell_cfg_s& sp_cell_cfg)
+           return false;
+         }
+       } else {
+-        logger.warning("Option csi_meas_cfg not of type setup");
++        logger.debug("Option csi_meas_cfg not of type setup");
+         return false;
+       }
+     } else {
+-      logger.warning("Option csi_meas_cfg in spCellConfigDedicated not present");
++      logger.debug("Option csi_meas_cfg in spCellConfigDedicated not present");
+     }
+ 
+   } else {
+-    logger.warning("Option sp_cell_cfg_ded not present");
++    logger.debug("Option sp_cell_cfg_ded not present");
+     return false;
+   }
+ 
+@@ -1947,7 +1947,7 @@ bool rrc_nr::apply_phy_cell_group_cfg(const phys_cell_group_cfg_s& phys_cell_gro
+   if (make_phy_harq_ack_cfg(phys_cell_group_cfg, &harq_ack) == true) {
+     phy_cfg.harq_ack = harq_ack;
+   } else {
+-    logger.warning("Warning while building harq_ack structure");
++    logger.debug("Warning while building harq_ack structure");
+     return false;
+   }
+   return true;
+@@ -1991,10 +1991,10 @@ bool rrc_nr::apply_drb_release(const uint8_t drb)
+ {
+   uint32_t lcid = get_lcid_for_drbid(drb);
+   if (lcid == 0) {
+-    logger.warning("Can not release bearer with lcid %d and drb %d", lcid, drb);
++    logger.debug("Can not release bearer with lcid %d and drb %d", lcid, drb);
+     return false;
+   }
+-  logger.info("Releasing bearer DRB: %d LCID: %d", drb, lcid);
++  logger.debug("Releasing bearer DRB: %d LCID: %d", drb, lcid);
+   pdcp->del_bearer(lcid);
+   // TODO
+   //  2>  if the UE is operating in EN-DC
+@@ -2079,7 +2079,7 @@ bool rrc_nr::apply_drb_add_mod(const drb_to_add_mod_s& drb_cfg)
+ 
+   if (drb_cfg.pdcp_cfg.drb.pdcp_sn_size_dl_present && drb_cfg.pdcp_cfg.drb.pdcp_sn_size_ul_present &&
+       (drb_cfg.pdcp_cfg.drb.pdcp_sn_size_ul.to_number() != drb_cfg.pdcp_cfg.drb.pdcp_sn_size_dl.to_number())) {
+-    logger.warning("PDCP SN size in UL and DL are not the same. make_drb_pdcp_config_t will use the DL SN size %d ",
++    logger.debug("PDCP SN size in UL and DL are not the same. make_drb_pdcp_config_t will use the DL SN size %d ",
+                    drb_cfg.pdcp_cfg.drb.pdcp_sn_size_dl.to_number());
+   }
+ 
+@@ -2104,7 +2104,7 @@ bool rrc_nr::apply_security_cfg(const security_cfg_s& security_cfg)
+   logger.debug("Applying Security config");
+   if (security_cfg.key_to_use_present) {
+     if (security_cfg.key_to_use.value != security_cfg_s::key_to_use_opts::options::secondary) {
+-      logger.warning("Only secondary key supported yet");
++      logger.debug("Only secondary key supported yet");
+       return false;
+     }
+   }
+@@ -2218,7 +2218,7 @@ void rrc_nr::handle_rrc_reconfig(const rrc_recfg_s& reconfig)
+ }
+ void rrc_nr::handle_ue_capability_enquiry(const ue_cap_enquiry_s& ue_cap_enquiry)
+ {
+-  logger.info("Received UE Capability Enquiry");
++  logger.debug("Received UE Capability Enquiry");
+   send_ue_capability_info(ue_cap_enquiry);
+ }
+ 
+@@ -2254,7 +2254,7 @@ void rrc_nr::handle_security_mode_command(const asn1::rrc_nr::security_mode_cmd_
+     logger.error("Missing Integrity Algorithm Config");
+   }
+ 
+-  logger.info("Received Security Mode Command nea: %s, nia: %s",
++  logger.debug("Received Security Mode Command nea: %s, nia: %s",
+               ciphering_algorithm_id_nr_text[sec_cfg.cipher_algo],
+               integrity_algorithm_id_nr_text[sec_cfg.integ_algo]);
+ 
+@@ -2272,7 +2272,7 @@ void rrc_nr::handle_security_mode_command(const asn1::rrc_nr::security_mode_cmd_
+ 
+ void rrc_nr::handle_rrc_release(const asn1::rrc_nr::rrc_release_s& msg)
+ {
+-  logger.info("Received RRC Release");
++  logger.debug("Received RRC Release");
+   srsran::console("Received RRC Release\n");
+ 
+   rrc_release();
+@@ -2286,9 +2286,9 @@ void rrc_nr::generate_as_keys()
+   logger.debug(k_amf.data(), 32, "UE K_amf");
+   logger.debug("Generating K_gnb with UL NAS COUNT: %d", nas->get_ul_nas_count());
+   usim->generate_nr_as_keys(k_amf, nas->get_ul_nas_count(), &sec_cfg);
+-  logger.info(sec_cfg.k_rrc_enc.data(), 32, "RRC encryption key - k_rrc_enc");
+-  logger.info(sec_cfg.k_rrc_int.data(), 32, "RRC integrity key  - k_rrc_int");
+-  logger.info(sec_cfg.k_up_enc.data(), 32, "UP encryption key  - k_up_enc");
++  logger.debug(sec_cfg.k_rrc_enc.data(), 32, "RRC encryption key - k_rrc_enc");
++  logger.debug(sec_cfg.k_rrc_int.data(), 32, "RRC integrity key  - k_rrc_int");
++  logger.debug(sec_cfg.k_up_enc.data(), 32, "UP encryption key  - k_up_enc");
+ }
+ 
+ // RLC interface
+@@ -2298,7 +2298,7 @@ void rrc_nr::protocol_failure() {}
+ // MAC interface
+ void rrc_nr::ra_completed()
+ {
+-  logger.info("RA completed.");
++  logger.debug("RA completed.");
+   if (rrc_eutra) {
+     logger.debug("Applying remaining CSI configuration.");
+     phy_cfg_state = PHY_CFG_STATE_NSA_RA_COMPLETED;
+@@ -2343,24 +2343,24 @@ void rrc_nr::set_phy_config_complete(bool status)
+ 
+   switch (phy_cfg_state) {
+     case PHY_CFG_STATE_NONE:
+-      logger.warning("PHY configuration completed without a clear state.");
++      logger.debug("PHY configuration completed without a clear state.");
+       break;
+     case PHY_CFG_STATE_SA_MIB_CFG:
+-      logger.info("PHY configuration with MIB parameters completed.");
++      logger.debug("PHY configuration with MIB parameters completed.");
+       break;
+     case PHY_CFG_STATE_SA_SIB_CFG:
+-      logger.info("PHY configuration with SIB parameters completed.");
++      logger.debug("PHY configuration with SIB parameters completed.");
+       break;
+     case PHY_CFG_STATE_SA_FULL_CFG:
+-      logger.info("PHY configuration completed.");
++      logger.debug("PHY configuration completed.");
+       break;
+     case PHY_CFG_STATE_NSA_APPLY_SP_CELL:
+       // Start RA procedure
+-      logger.info("PHY configuration completed. Starting RA procedure.");
++      logger.debug("PHY configuration completed. Starting RA procedure.");
+       mac->start_ra_procedure();
+       break;
+     case PHY_CFG_STATE_NSA_RA_COMPLETED:
+-      logger.info("Remaining CSI configuration completed.");
++      logger.debug("Remaining CSI configuration completed.");
+       break;
+   }
+   phy_cfg_state = PHY_CFG_STATE_NONE;
+diff --git a/srsue/src/stack/rrc_nr/rrc_nr_procedures.cc b/srsue/src/stack/rrc_nr/rrc_nr_procedures.cc
+index 619eac6de..876a25e3a 100644
+--- a/srsue/src/stack/rrc_nr/rrc_nr_procedures.cc
++++ b/srsue/src/stack/rrc_nr/rrc_nr_procedures.cc
+@@ -23,8 +23,8 @@
+ #include "srsran/common/standard_streams.h"
+ 
+ #define Error(fmt, ...) rrc_handle.logger.error("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+-#define Warning(fmt, ...) rrc_handle.logger.warning("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+-#define Info(fmt, ...) rrc_handle.logger.info("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
++#define Warning(fmt, ...) rrc_handle.logger.debug("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
++#define Info(fmt, ...) rrc_handle.logger.debug("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+ #define Debug(fmt, ...) rrc_handle.logger.debug("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+ 
+ using namespace asn1::rrc_nr;
+@@ -195,7 +195,7 @@ proc_outcome_t rrc_nr::setup_request_proc::init(srsran::nr_establishment_cause_t
+   }
+ 
+   if (rrc_handle.state != RRC_NR_STATE_IDLE) {
+-    logger.warning("Requested RRC connection establishment while not in IDLE");
++    logger.debug("Requested RRC connection establishment while not in IDLE");
+     return proc_outcome_t::error;
+   }
+ 
+@@ -270,7 +270,7 @@ proc_outcome_t rrc_nr::setup_request_proc::step()
+ void rrc_nr::setup_request_proc::then(const srsran::proc_state_t& result)
+ {
+   if (result.is_error()) {
+-    logger.warning("Could not finish setup request. Deallocating dedicatedInfoNAS PDU");
++    logger.debug("Could not finish setup request. Deallocating dedicatedInfoNAS PDU");
+     dedicated_info_nas.reset();
+     rrc_handle.dedicated_info_nas.reset();
+   } else {
+@@ -360,7 +360,7 @@ srsran::proc_outcome_t rrc_nr::connection_setup_proc::react(const bool& config_c
+ void rrc_nr::connection_setup_proc::then(const srsran::proc_state_t& result)
+ {
+   if (result.is_success()) {
+-    logger.info("Finished %s successfully", name());
++    logger.debug("Finished %s successfully", name());
+     return;
+   }
+ }
+diff --git a/srsue/src/stack/ue_stack_lte.cc b/srsue/src/stack/ue_stack_lte.cc
+index 4d6050304..49bfede6b 100644
+--- a/srsue/src/stack/ue_stack_lte.cc
++++ b/srsue/src/stack/ue_stack_lte.cc
+@@ -434,7 +434,7 @@ void ue_stack_lte::write_sdu(uint32_t eps_bearer_id, srsran::unique_byte_buffer_
+         pdcp_nr.write_sdu(bearer.lcid, std::move(sdu));
+       }
+     } else {
+-      stack_logger.warning("Can't deliver SDU for EPS bearer %d. Dropping it.", eps_bearer_id);
++      stack_logger.debug("Can't deliver SDU for EPS bearer %d. Dropping it.", eps_bearer_id);
+     }
+   };
+ 
+@@ -537,7 +537,7 @@ void ue_stack_lte::run_tti_impl(uint32_t tti, uint32_t tti_jump)
+   if (args.have_tti_time_stats) {
+     std::chrono::nanoseconds dur = tti_tprof.stop();
+     if (dur > TTI_WARN_THRESHOLD_MS) {
+-      mac_logger.warning("%s: detected long duration=%" PRId64 "ms",
++      mac_logger.debug("%s: detected long duration=%" PRId64 "ms",
+                          "proc_time",
+                          std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
+     }
+@@ -545,7 +545,7 @@ void ue_stack_lte::run_tti_impl(uint32_t tti, uint32_t tti_jump)
+ 
+   // print warning if PHY pushes new TTI messages faster than we process them
+   if (sync_task_queue.size() > SYNC_QUEUE_WARN_THRESHOLD) {
+-    stack_logger.warning("Detected slow task processing (sync_queue_len=%zd).", sync_task_queue.size());
++    stack_logger.debug("Detected slow task processing (sync_queue_len=%zd).", sync_task_queue.size());
+   }
+ }
+ void ue_stack_lte::set_phy_config_complete(bool status)
+diff --git a/srsue/src/stack/ue_stack_nr.cc b/srsue/src/stack/ue_stack_nr.cc
+index 0fc83f567..2b106e2c5 100644
+--- a/srsue/src/stack/ue_stack_nr.cc
++++ b/srsue/src/stack/ue_stack_nr.cc
+@@ -179,7 +179,7 @@ void ue_stack_nr::write_sdu(uint32_t lcid, srsran::unique_byte_buffer_t sdu)
+     auto ret = gw_task_queue.try_push(std::bind(
+         [this, lcid](srsran::unique_byte_buffer_t& sdu) { pdcp->write_sdu(lcid, std::move(sdu)); }, std::move(sdu)));
+     if (ret.is_error()) {
+-      pdcp_logger.warning("GW SDU with lcid=%d was discarded.", lcid);
++      pdcp_logger.debug("GW SDU with lcid=%d was discarded.", lcid);
+     }
+   }
+ }
+diff --git a/srsue/src/stack/upper/gw.cc b/srsue/src/stack/upper/gw.cc
+index 211c2a67c..d40ef4939 100644
+--- a/srsue/src/stack/upper/gw.cc
++++ b/srsue/src/stack/upper/gw.cc
+@@ -142,18 +142,18 @@ void gw::write_pdu(uint32_t lcid, srsran::unique_byte_buffer_t pdu)
+   }
+   if (!if_up) {
+     if (run_enable) {
+-      logger.warning("TUN/TAP not up - dropping gw RX message");
++      logger.debug("TUN/TAP not up - dropping gw RX message");
+     }
+   } else if (pdu->N_bytes < 20) {
+     // Packet not large enough to hold IPv4 Header
+-    logger.warning("Packet to small to hold IPv4 header. Dropping packet with %d B", pdu->N_bytes);
++    logger.debug("Packet to small to hold IPv4 header. Dropping packet with %d B", pdu->N_bytes);
+   } else {
+     // Only handle IPv4 and IPv6 packets
+     struct iphdr* ip_pkt = (struct iphdr*)pdu->msg;
+     if (ip_pkt->version == 4 || ip_pkt->version == 6) {
+       int n = write(tun_fd, pdu->msg, pdu->N_bytes);
+       if (n > 0 && (pdu->N_bytes != (uint32_t)n)) {
+-        logger.warning("DL TUN/TAP write failure. Wanted to write %d B but only wrote %d B.", pdu->N_bytes, n);
++        logger.debug("DL TUN/TAP write failure. Wanted to write %d B but only wrote %d B.", pdu->N_bytes, n);
+       }
+     } else {
+       logger.error("Unsupported IP version. Dropping packet with %d B", pdu->N_bytes);
+@@ -182,12 +182,12 @@ void gw::write_pdu_mch(uint32_t lcid, srsran::unique_byte_buffer_t pdu)
+ 
+     if (!if_up) {
+       if (run_enable) {
+-        logger.warning("TUN/TAP not up - dropping gw RX message");
++        logger.debug("TUN/TAP not up - dropping gw RX message");
+       }
+     } else {
+       int n = write(tun_fd, pdu->msg, pdu->N_bytes);
+       if (n > 0 && (pdu->N_bytes != (uint32_t)n)) {
+-        logger.warning("DL TUN/TAP write failure");
++        logger.debug("DL TUN/TAP write failure");
+       }
+     }
+   }
+@@ -463,7 +463,7 @@ int gw::init_if(char* err_str)
+     logger.debug("Found link-local IPv6 address: %s", inet_ntop(AF_INET6, &in6p, addr_str, INET6_ADDRSTRLEN));
+     del_ipv6_addr(&in6p);
+   } else {
+-    logger.warning("Could not find link-local IPv6 address.");
++    logger.debug("Could not find link-local IPv6 address.");
+   }
+   if_up = true;
+ 
+diff --git a/srsue/src/stack/upper/nas.cc b/srsue/src/stack/upper/nas.cc
+index 18ba9bf49..5d6cd42cf 100644
+--- a/srsue/src/stack/upper/nas.cc
++++ b/srsue/src/stack/upper/nas.cc
+@@ -72,7 +72,7 @@ int nas::init(usim_interface_nas* usim_, rrc_interface_nas* rrc_, gw_interface_n
+ 
+   // parse and sanity check EIA list
+   if (parse_security_algorithm_list(cfg_.eia, eia_caps) != SRSRAN_SUCCESS) {
+-    logger.warning("Failed to parse integrity protection algorithm list: Defaulting to EIA1-128, EIA2-128, EIA3-128");
++    logger.debug("Failed to parse integrity protection algorithm list: Defaulting to EIA1-128, EIA2-128, EIA3-128");
+     eia_caps[0] = false;
+     eia_caps[1] = true;
+     eia_caps[2] = true;
+@@ -81,7 +81,7 @@ int nas::init(usim_interface_nas* usim_, rrc_interface_nas* rrc_, gw_interface_n
+ 
+   // parse and sanity check EEA list
+   if (parse_security_algorithm_list(cfg_.eea, eea_caps) != SRSRAN_SUCCESS) {
+-    logger.warning("Failed to parse encryption algorithm list: Defaulting to EEA0, EEA1-128, EEA2-128, EEA3-128");
++    logger.debug("Failed to parse encryption algorithm list: Defaulting to EEA0, EEA1-128, EEA2-128, EEA3-128");
+     eea_caps[0] = true;
+     eea_caps[1] = true;
+     eea_caps[2] = true;
+@@ -205,7 +205,7 @@ void nas::enter_emm_deregistered(emm_state_t::deregistered_substate_t substate)
+ void nas::timer_expired(uint32_t timeout_id)
+ {
+   if (timeout_id == t3402.id()) {
+-    logger.warning("Timer T3402 expired: trying to attach again");
++    logger.debug("Timer T3402 expired: trying to attach again");
+     attach_attempt_counter = 0; // Sec. 5.5.1.1
+     enter_emm_deregistered(emm_state_t::deregistered_substate_t::plmn_search);
+   } else if (timeout_id == t3410.id()) {
+@@ -213,8 +213,9 @@ void nas::timer_expired(uint32_t timeout_id)
+     attach_attempt_counter++;
+ 
+     srsran::console("Attach failed (attempt %d/%d)\n", attach_attempt_counter, max_attach_attempts);
++    logger.info("[we can exit now]");
+     if (attach_attempt_counter < max_attach_attempts) {
+-      logger.warning("Timer T3410 expired after attach attempt %d/%d: starting T3411",
++      logger.debug("Timer T3410 expired after attach attempt %d/%d: starting T3411",
+                      attach_attempt_counter,
+                      max_attach_attempts);
+ 
+@@ -223,7 +224,7 @@ void nas::timer_expired(uint32_t timeout_id)
+       enter_emm_deregistered(emm_state_t::deregistered_substate_t::attempting_to_attach);
+     } else {
+       // maximum attach attempts reached
+-      logger.warning("Timer T3410 expired. Maximum attempts reached. Starting T3402");
++      logger.debug("Timer T3410 expired. Maximum attempts reached. Starting T3402");
+       t3402.run();
+       reset_security_context();
+     }
+@@ -231,7 +232,7 @@ void nas::timer_expired(uint32_t timeout_id)
+     // In order to allow reattaching the UE, we switch into EMM_STATE_DEREGISTERED straight
+     enter_emm_deregistered(emm_state_t::deregistered_substate_t::plmn_search);
+   } else if (timeout_id == reattach_timer.id()) {
+-    logger.warning("Reattach timer expired: trying to attach again");
++    logger.debug("Reattach timer expired: trying to attach again");
+     start_attach_request(srsran::establishment_cause_t::mo_sig);
+   } else if (timeout_id == airplane_mode_sim_timer.id()) {
+     logger.debug("Airplane mode simulation timer expired after %dms, airplane mode is currently %s.",
+@@ -454,7 +455,7 @@ bool nas::paging(s_tmsi_t* ue_identity)
+     logger.info("Received paging: requesting RRC connection establishment");
+     start_service_request(srsran::establishment_cause_t::mt_access);
+   } else {
+-    logger.warning("Received paging while in state %s", state.get_full_state_text().c_str());
++    logger.debug("Received paging while in state %s", state.get_full_state_text().c_str());
+     return false;
+   }
+   return true;
+@@ -840,8 +841,8 @@ void nas::parse_attach_accept(uint32_t lcid, unique_byte_buffer_t pdu)
+          LIBLTE_MME_PDN_TYPE_IPV4 == act_def_eps_bearer_context_req.pdn_addr.pdn_type) ||
+         ("ipv4v6" == cfg.apn_protocol &&
+          LIBLTE_MME_PDN_TYPE_IPV6 == act_def_eps_bearer_context_req.pdn_addr.pdn_type)) {
+-      logger.warning("Requested IPv4v6, but only received a single PDN address.");
+-      logger.warning("EMM Cause: %d", attach_accept.emm_cause);
++      logger.debug("Requested IPv4v6, but only received a single PDN address.");
++      logger.debug("EMM Cause: %d", attach_accept.emm_cause);
+     }
+     if (LIBLTE_MME_PDN_TYPE_IPV4 == act_def_eps_bearer_context_req.pdn_addr.pdn_type) {
+       ip_addr = 0;
+@@ -1028,7 +1029,7 @@ void nas::parse_attach_reject(uint32_t lcid, unique_byte_buffer_t pdu, const uin
+   ZERO_OBJECT(attach_rej);
+ 
+   liblte_mme_unpack_attach_reject_msg((LIBLTE_BYTE_MSG_STRUCT*)pdu.get(), &attach_rej);
+-  logger.warning("Received Attach Reject. Cause= %02X", attach_rej.emm_cause);
++  logger.debug("Received Attach Reject. Cause= %02X", attach_rej.emm_cause);
+   srsran::console("Received Attach Reject. Cause= %02X\n", attach_rej.emm_cause);
+ 
+   // do not accept if the message is not protected when the EMM cause is #25 (TS 24.301 Sec. 4.4.4.2)
+@@ -1117,7 +1118,7 @@ void nas::parse_authentication_request(uint32_t lcid, unique_byte_buffer_t pdu,
+     logger.error("Network authentication synchronization failure.");
+     send_authentication_failure(LIBLTE_MME_EMM_CAUSE_SYNCH_FAILURE, res);
+   } else {
+-    logger.warning("Network authentication failure");
++    logger.debug("Network authentication failure");
+     srsran::console("Warning: Network authentication failure\n");
+     send_authentication_failure(LIBLTE_MME_EMM_CAUSE_MAC_FAILURE, nullptr);
+   }
+@@ -1125,7 +1126,7 @@ void nas::parse_authentication_request(uint32_t lcid, unique_byte_buffer_t pdu,
+ 
+ void nas::parse_authentication_reject(uint32_t lcid, unique_byte_buffer_t pdu)
+ {
+-  logger.warning("Received Authentication Reject");
++  logger.debug("Received Authentication Reject");
+   reset_security_context();
+   enter_emm_deregistered(emm_state_t::deregistered_substate_t::plmn_search);
+   // TODO: Command RRC to release?
+@@ -1175,7 +1176,7 @@ void nas::parse_security_mode_command(uint32_t lcid, unique_byte_buffer_t pdu)
+ 
+   if (have_ctxt) {
+     if (sec_mode_cmd.nas_ksi.nas_ksi != ctxt.ksi) {
+-      logger.warning("Sending Security Mode Reject due to key set ID mismatch");
++      logger.debug("Sending Security Mode Reject due to key set ID mismatch");
+       send_security_mode_reject(LIBLTE_MME_EMM_CAUSE_SECURITY_MODE_REJECTED_UNSPECIFIED);
+       return;
+     }
+@@ -1187,7 +1188,7 @@ void nas::parse_security_mode_command(uint32_t lcid, unique_byte_buffer_t pdu)
+ 
+   // Check capabilities replay
+   if (!check_cap_replay(&sec_mode_cmd.ue_security_cap)) {
+-    logger.warning("Sending Security Mode Reject due to security capabilities replay mismatch");
++    logger.debug("Sending Security Mode Reject due to security capabilities replay mismatch");
+     send_security_mode_reject(LIBLTE_MME_EMM_CAUSE_UE_SECURITY_CAPABILITIES_MISMATCH);
+     return;
+   }
+@@ -1204,7 +1205,7 @@ void nas::parse_security_mode_command(uint32_t lcid, unique_byte_buffer_t pdu)
+ 
+   // Check capabilities
+   if (!eea_caps[ctxt_base.cipher_algo] || !eia_caps[ctxt_base.integ_algo]) {
+-    logger.warning("Sending Security Mode Reject due to security capabilities mismatch");
++    logger.debug("Sending Security Mode Reject due to security capabilities mismatch");
+     send_security_mode_reject(LIBLTE_MME_EMM_CAUSE_UE_SECURITY_CAPABILITIES_MISMATCH);
+     return;
+   }
+@@ -1221,7 +1222,7 @@ void nas::parse_security_mode_command(uint32_t lcid, unique_byte_buffer_t pdu)
+                lcid);
+ 
+   if (not integrity_check(pdu.get())) {
+-    logger.warning("Sending Security Mode Reject due to integrity check failure");
++    logger.debug("Sending Security Mode Reject due to integrity check failure");
+     send_security_mode_reject(LIBLTE_MME_EMM_CAUSE_MAC_FAILURE);
+     return;
+   }
+@@ -1351,7 +1352,7 @@ void nas::parse_detach_request(uint32_t lcid, unique_byte_buffer_t pdu)
+       }
+       break;
+     default:
+-      logger.warning("Received detach request in invalid state (%s)", state.get_full_state_text().c_str());
++      logger.debug("Received detach request in invalid state (%s)", state.get_full_state_text().c_str());
+       break;
+   }
+ }
+@@ -1700,7 +1701,7 @@ void nas::gen_pdn_connectivity_request(LIBLTE_BYTE_MSG_STRUCT* msg)
+     logger.debug("Requesting IPv4v6 PDN protocol");
+     pdn_con_req.pdn_type = LIBLTE_MME_PDN_TYPE_IPV4V6;
+   } else {
+-    logger.warning("Unsupported PDN prtocol. Defaulting to IPv4");
++    logger.debug("Unsupported PDN prtocol. Defaulting to IPv4");
+     srsran::console("Unsupported PDN prtocol: %s. Defaulting to IPv4\n", cfg.apn_protocol.c_str());
+     pdn_con_req.pdn_type = LIBLTE_MME_PDN_TYPE_IPV4;
+   }
+diff --git a/srsue/src/stack/upper/nas_5g.cc b/srsue/src/stack/upper/nas_5g.cc
+index a3ebdedac..9be5e6841 100644
+--- a/srsue/src/stack/upper/nas_5g.cc
++++ b/srsue/src/stack/upper/nas_5g.cc
+@@ -87,7 +87,7 @@ int nas_5g::init(usim_interface_nas*      usim_,
+ 
+   // parse and sanity check EIA list
+   if (parse_security_algorithm_list(cfg_.ia5g, ia5g_caps) != SRSRAN_SUCCESS) {
+-    logger.warning("Failed to parse integrity algorithm list: Defaulting to 5G-EI1-128, 5G-EI2-128, 5G-EI3-128");
++    logger.debug("Failed to parse integrity algorithm list: Defaulting to 5G-EI1-128, 5G-EI2-128, 5G-EI3-128");
+     ia5g_caps[0] = false;
+     ia5g_caps[1] = true;
+     ia5g_caps[2] = true;
+@@ -96,7 +96,7 @@ int nas_5g::init(usim_interface_nas*      usim_,
+ 
+   // parse and sanity check EEA list
+   if (parse_security_algorithm_list(cfg_.ea5g, ea5g_caps) != SRSRAN_SUCCESS) {
+-    logger.warning(
++    logger.debug(
+         "Failed to parse encryption algorithm list: Defaulting to 5G-EA0, 5G-EA1-128, 5G-EA2-128, 5G-EA3-128");
+     ea5g_caps[0] = true;
+     ea5g_caps[1] = true;
+@@ -105,7 +105,7 @@ int nas_5g::init(usim_interface_nas*      usim_,
+   }
+ 
+   if (init_pdu_sessions(cfg.pdu_session_cfgs) != SRSRAN_SUCCESS) {
+-    logger.warning("Failure while configuring pdu sessions");
++    logger.debug("Failure while configuring pdu sessions");
+   }
+ 
+   running = true;
+@@ -303,7 +303,7 @@ int nas_5g::send_registration_request()
+   } else {
+     logger.debug("Initiating RRC NR Connection");
+     if (rrc_nr->connection_request(nr_establishment_cause_t::mo_Signalling, std::move(pdu)) != SRSRAN_SUCCESS) {
+-      logger.warning("Error starting RRC NR connection");
++      logger.debug("Error starting RRC NR connection");
+       return SRSRAN_ERROR;
+     }
+   }
+@@ -733,7 +733,7 @@ int nas_5g::send_identity_response(srsran::nas_5g::identity_type_5gs_t::identity
+       imeisv.imeisv[15] = ue_svn_oct2;
+     } break;
+     default:
+-      logger.warning("Unhandled identity type for identity response");
++      logger.debug("Unhandled identity type for identity response");
+       return SRSRAN_ERROR;
+   }
+ 
+@@ -802,7 +802,7 @@ int nas_5g::handle_registration_accept(registration_accept_t& registration_accep
+ {
+   ctxt_base.rx_count++;
+   if (state.get_state() != mm5g_state_t::state_t::registered_initiated) {
+-    logger.warning("Not compatibale with current state %s", state.get_full_state_text());
++    logger.debug("Not compatibale with current state %s", state.get_full_state_text());
+     return SRSRAN_ERROR;
+   }
+ 
+@@ -959,7 +959,7 @@ int nas_5g::handle_security_mode_command(security_mode_command_t&     security_m
+ 
+   // Check replayed ue security capabilities
+   if (!check_replayed_ue_security_capabilities(security_mode_command.replayed_ue_security_capabilities)) {
+-    logger.warning("Sending Security Mode Reject due to security capabilities mismatch");
++    logger.debug("Sending Security Mode Reject due to security capabilities mismatch");
+     send_security_mode_reject(cause_5gmm_t::cause_5gmm_type_::ue_security_capabilities_mismatch);
+     return SRSRAN_ERROR;
+   }
+@@ -982,7 +982,7 @@ int nas_5g::handle_security_mode_command(security_mode_command_t&     security_m
+   logger.debug("Generating integrity check. integ_algo:%d, count_dl:%d", ctxt_base.integ_algo, ctxt_base.rx_count);
+ 
+   if (not integrity_check(pdu.get())) {
+-    logger.warning("Sending Security Mode Reject due to integrity check failure");
++    logger.debug("Sending Security Mode Reject due to integrity check failure");
+     send_security_mode_reject(cause_5gmm_t::cause_5gmm_type_::options::mac_failure);
+     return SRSRAN_ERROR;
+   }
+@@ -1017,7 +1017,7 @@ int nas_5g::handle_dl_nas_transport(srsran::nas_5g::dl_nas_transport_t& dl_nas_t
+       return handle_n1_sm_information(dl_nas_transport.payload_container.payload_container_contents);
+       break;
+     default:
+-      logger.warning("Not handling payload container %x",
++      logger.debug("Not handling payload container %x",
+                      dl_nas_transport.payload_container_type.payload_container_type.value);
+       break;
+   }
+@@ -1055,7 +1055,7 @@ int nas_5g::handle_deregistration_accept_ue_originating(
+   logger.info("Received Deregistration Accept (UE Originating)");
+   ctxt_base.rx_count++;
+   if (state.get_state() != mm5g_state_t::state_t::deregistered_initiated) {
+-    logger.warning("Received deregistration accept while not in deregistered initiated state");
++    logger.debug("Received deregistration accept while not in deregistered initiated state");
+   }
+ 
+   state.set_deregistered(mm5g_state_t::deregistered_substate_t::null);
+@@ -1332,7 +1332,7 @@ int nas_5g::add_pdu_session(uint16_t                      pdu_session_id,
+ 
+   if (!(pdu_session_type == LIBLTE_MME_PDN_TYPE_IPV4V6 || pdu_session_type == LIBLTE_MME_PDN_TYPE_IPV4 ||
+         pdu_session_type == LIBLTE_MME_PDN_TYPE_IPV6)) {
+-    logger.warning("PDU session typed expected to be of IPV4 or IPV6 or IPV4V6");
++    logger.debug("PDU session typed expected to be of IPV4 or IPV6 or IPV4V6");
+     return SRSRAN_ERROR;
+   }
+ 
+diff --git a/srsue/src/stack/upper/nas_5g_procedures.cc b/srsue/src/stack/upper/nas_5g_procedures.cc
+index 687a57929..4d867173f 100644
+--- a/srsue/src/stack/upper/nas_5g_procedures.cc
++++ b/srsue/src/stack/upper/nas_5g_procedures.cc
+@@ -67,17 +67,17 @@ srsran::proc_outcome_t nas_5g::pdu_session_establishment_procedure::react(
+ {
+   // TODO check the pdu session values
+   if (pdu_session_est_accept.dnn_present == false) {
+-    logger.warning("Expected DNN in PDU session establishment accept");
++    logger.debug("Expected DNN in PDU session establishment accept");
+     return proc_outcome_t::error;
+   }
+   if (pdu_session_est_accept.pdu_address_present == false) {
+-    logger.warning("Expected PDU Address in PDU session establishment accept");
++    logger.debug("Expected PDU Address in PDU session establishment accept");
+     return proc_outcome_t::error;
+   }
+   if (parent_nas->add_pdu_session(pdu_session_id,
+                                   pdu_session_est_accept.selected_pdu_session_type.pdu_session_type_value,
+                                   pdu_session_est_accept.pdu_address) != SRSRAN_SUCCESS) {
+-    logger.warning("Adding PDU session failed\n");
++    logger.debug("Adding PDU session failed\n");
+     return srsran::proc_outcome_t::error;
+   }
+   return srsran::proc_outcome_t::success;
+diff --git a/srsue/src/stack/upper/nas_base.cc b/srsue/src/stack/upper/nas_base.cc
+index 79aa48401..fa8af71f9 100644
+--- a/srsue/src/stack/upper/nas_base.cc
++++ b/srsue/src/stack/upper/nas_base.cc
+@@ -100,7 +100,7 @@ bool nas_base::integrity_check(byte_buffer_t* pdu)
+     // Check if expected mac equals the sent mac
+     for (int i = 0; i < 4; i++) {
+       if (exp_mac[i] != mac[i]) {
+-        logger.warning("Integrity check failure. Local: count=%d, [%02x %02x %02x %02x], "
++        logger.debug("Integrity check failure. Local: count=%d, [%02x %02x %02x %02x], "
+                        "Received: count=%d, [%02x %02x %02x %02x]",
+                        count_est,
+                        exp_mac[0],
+diff --git a/srsue/src/stack/upper/nas_idle_procedures.cc b/srsue/src/stack/upper/nas_idle_procedures.cc
+index 5fbd0eafb..ee93d9f1f 100644
+--- a/srsue/src/stack/upper/nas_idle_procedures.cc
++++ b/srsue/src/stack/upper/nas_idle_procedures.cc
+@@ -26,7 +26,7 @@
+ using namespace srsran;
+ 
+ #define ProcError(fmt, ...) nas_ptr->logger.error("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+-#define ProcWarning(fmt, ...) nas_ptr->logger.warning("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
++#define ProcWarning(fmt, ...) nas_ptr->logger.debug("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+ #define ProcInfo(fmt, ...) nas_ptr->logger.info("Proc \"%s\" - " fmt, name(), ##__VA_ARGS__)
+ 
+ namespace srsue {
+diff --git a/srsue/src/stack/upper/pcsc_usim.cc b/srsue/src/stack/upper/pcsc_usim.cc
+index dfe1ada60..d97c7f76b 100644
+--- a/srsue/src/stack/upper/pcsc_usim.cc
++++ b/srsue/src/stack/upper/pcsc_usim.cc
+@@ -128,7 +128,7 @@ auth_result_t pcsc_usim::generate_authentication_response(uint8_t* rand,
+       *res_len = AKA_AUTS_LEN;
+       return AUTH_SYNCH_FAILURE;
+     default:
+-      logger.warning("SCARD: Unknown USIM failure.");
++      logger.debug("SCARD: Unknown USIM failure.");
+       return ret;
+   }
+ 
+@@ -189,7 +189,7 @@ auth_result_t pcsc_usim::generate_authentication_response_5g(uint8_t*    rand,
+       res_len = AKA_AUTS_LEN;
+       return AUTH_SYNCH_FAILURE;
+     default:
+-      logger.warning("SCARD: Unknown USIM failure.");
++      logger.debug("SCARD: Unknown USIM failure.");
+       return ret;
+   }
+ 
+@@ -516,7 +516,7 @@ int pcsc_usim::scard::_select_file(unsigned short file_id,
+ 
+   if (resp[0] == 0x98 && resp[1] == 0x04) {
+     /* Security status not satisfied (PIN_WLAN) */
+-    logger.warning("SCARD: Security status not satisfied.");
++    logger.debug("SCARD: Security status not satisfied.");
+     return -1;
+   }
+ 
+@@ -526,7 +526,7 @@ int pcsc_usim::scard::_select_file(unsigned short file_id,
+   }
+ 
+   if (resp[0] != 0x6c && resp[0] != 0x9f && resp[0] != 0x61) {
+-    logger.warning("SCARD: unexpected response 0x%02x (expected 0x61, 0x6c, or 0x9f)", resp[0]);
++    logger.debug("SCARD: unexpected response 0x%02x (expected 0x61, 0x6c, or 0x9f)", resp[0]);
+     return -1;
+   }
+ 
+@@ -541,7 +541,7 @@ int pcsc_usim::scard::_select_file(unsigned short file_id,
+     return 0;
+   }
+ 
+-  logger.warning("SCARD: SCardTransmit err=0x%lx", ret);
++  logger.debug("SCARD: SCardTransmit err=0x%lx", ret);
+   return -1;
+ }
+ 
+@@ -812,7 +812,7 @@ int pcsc_usim::scard::get_imsi(char* imsi, size_t* len)
+   if (select_file(SCARD_FILE_GSM_EF_IMSI, buf, &blen))
+     return -1;
+   if (blen < 4) {
+-    logger.warning("SCARD: too short (GSM) EF-IMSI header (len=%ld)", (long)blen);
++    logger.debug("SCARD: too short (GSM) EF-IMSI header (len=%ld)", (long)blen);
+     return -2;
+   }
+ 
+@@ -1121,12 +1121,12 @@ int pcsc_usim::scard::umts_auth(const unsigned char* _rand,
+ 
+   if (len == 2 && resp[0] == 0x98 && resp[1] == 0x62) {
+     // Authentication error, application specific
+-    logger.warning("SCARD: UMTS auth failed - MAC != XMAC");
++    logger.debug("SCARD: UMTS auth failed - MAC != XMAC");
+     return -1;
+   }
+ 
+   if (len != 2 || resp[0] != 0x61) {
+-    logger.warning(
++    logger.debug(
+         "SCARD: unexpected response for UMTS auth request (len=%ld resp=%02x %02x)", (long)len, resp[0], resp[1]);
+     return -1;
+   }
+diff --git a/srsue/src/test/ttcn3/hdr/ttcn3_drb_interface.h b/srsue/src/test/ttcn3/hdr/ttcn3_drb_interface.h
+index f5ccb2263..276a952bd 100644
+--- a/srsue/src/test/ttcn3/hdr/ttcn3_drb_interface.h
++++ b/srsue/src/test/ttcn3/hdr/ttcn3_drb_interface.h
+@@ -114,9 +114,9 @@ private:
+           handle_sdu(document, lcid, octstr.data(), octstr.size(), ttcn3_helpers::get_follow_on_flag(document));
+         }
+       } else if ((*itr)["PduSduList"].HasMember("MacPdu")) {
+-        logger.warning("Not handling MacPdu type.");
++        logger.debug("Not handling MacPdu type.");
+       } else {
+-        logger.warning("Not handling this PduSdu type.");
++        logger.debug("Not handling this PduSdu type.");
+       }
+     }
+ 
+diff --git a/srsue/src/test/ttcn3/hdr/ttcn3_port_handler.h b/srsue/src/test/ttcn3/hdr/ttcn3_port_handler.h
+index bc769a81b..2e01c9442 100644
+--- a/srsue/src/test/ttcn3/hdr/ttcn3_port_handler.h
++++ b/srsue/src/test/ttcn3/hdr/ttcn3_port_handler.h
+@@ -130,7 +130,7 @@ public:
+       }
+ 
+       default:
+-        logger.warning("Unhandled notification type %d", notif->sn_header.sn_type);
++        logger.debug("Unhandled notification type %d", notif->sn_header.sn_type);
+         break;
+     }
+ 
+diff --git a/srsue/src/test/ttcn3/src/lte_ttcn3_phy.cc b/srsue/src/test/ttcn3/src/lte_ttcn3_phy.cc
+index ab9949c21..11b4cc919 100644
+--- a/srsue/src/test/ttcn3/src/lte_ttcn3_phy.cc
++++ b/srsue/src/test/ttcn3/src/lte_ttcn3_phy.cc
+@@ -130,7 +130,7 @@ bool lte_ttcn3_phy::cell_search(int earfcn)
+       cell_idx      = 0;
+     }
+   } else {
+-    logger.warning("No cells configured yet.");
++    logger.debug("No cells configured yet.");
+   }
+ 
+   stack->cell_search_complete(ret, found_cell);
+diff --git a/srsue/src/test/ttcn3/src/ttcn3_syssim.cc b/srsue/src/test/ttcn3/src/ttcn3_syssim.cc
+index 11387ef6e..20a6dd829 100644
+--- a/srsue/src/test/ttcn3/src/ttcn3_syssim.cc
++++ b/srsue/src/test/ttcn3/src/ttcn3_syssim.cc
+@@ -357,7 +357,7 @@ void ttcn3_syssim::new_tti_indication(uint64_t res)
+                 logger.info("Patched lcid in mac header to: %d", force_lcid);
+                 mac_pdu_ptr[0] = (mac_pdu_ptr[0] & 0xe0) | (force_lcid & 0x1f);
+               } else if (mac_msg_dl.nof_subh() > 1) {
+-                logger.warning(
++                logger.debug(
+                     "Not patching lcid to %d in mac header (nof_subh == %d)", force_lcid, mac_msg_dl.nof_subh());
+               }
+             }
+diff --git a/srsue/src/test/ttcn3/src/ttcn3_ue.cc b/srsue/src/test/ttcn3/src/ttcn3_ue.cc
+index 1980408e2..898ad812b 100644
+--- a/srsue/src/test/ttcn3/src/ttcn3_ue.cc
++++ b/srsue/src/test/ttcn3/src/ttcn3_ue.cc
+@@ -160,7 +160,7 @@ void ttcn3_ue::write_pdu(uint32_t lcid, srsran::unique_byte_buffer_t pdu)
+ 
+   switch (test_loop_mode) {
+     case TEST_LOOP_INACTIVE:
+-      logger.warning("Test loop inactive. Dropping PDU.");
++      logger.debug("Test loop inactive. Dropping PDU.");
+       break;
+     case TEST_LOOP_MODE_A_ACTIVE:
+       logger.error("Test loop mode A not implemented. Dropping PDU.");
+@@ -250,7 +250,7 @@ void ttcn3_ue::send_queued_data()
+   if (!stack->is_rrc_connected()) {
+     logger.info("RRC not connected, requesting NAS attach");
+     if (not stack->start_service_request()) {
+-      logger.warning("Could not reestablish the connection");
++      logger.debug("Could not reestablish the connection");
+     }
+     stack->get_task_sched().defer_callback(500, [&]() { send_queued_data(); });
+     return;
+diff --git a/srsue/src/ue.cc b/srsue/src/ue.cc
+index 038c2103c..ea70e3658 100644
+--- a/srsue/src/ue.cc
++++ b/srsue/src/ue.cc
+@@ -55,8 +55,8 @@ int ue::init(const all_args_t& args_)
+   int ret = SRSRAN_SUCCESS;
+ 
+   // Init UE log
+-  logger.set_level(srslog::basic_levels::info);
+-  logger.info("%s", get_build_string().c_str());
++  logger.set_level(srslog::basic_levels::debug);
++  //logger.info("%s", get_build_string().c_str());
+ 
+   // Validate arguments
+   if (parse_args(args_)) {
