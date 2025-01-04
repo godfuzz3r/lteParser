@@ -68,3 +68,30 @@ usage: sib-scan.sh [OPTION]...
   Use another sqlite path:
   ./sib-scan.sh -b 3 -d /tmp/myoutput.sqlite
 ```
+
+
+## usage example
+
+exec into container:
+```
+./run.sh
+```
+
+scan band 7 with limesdr:
+```
+./sib-scan.sh -d soapy -a "rxant=LNAH" -b 7 -d /vol/output/place1_band7.sqlite
+```
+
+parse data with dbhelper scripts:
+```
+cd ./vol
+python3 dbparsers/list-cells.py -d ./output/place1.sqlite # show basic info for all scanned earfcn's
+python3 dbparsers/get-info.py -d ./output/place1.sqlite # for each earfcn show info about neighbours
+```
+
+rescan arfcn's that already parsed:
+```
+./run.sh
+python3 dbparsers/get-arfcns.py -d ./output/place1.sqlite
+./sib-scan.sh -d soapy -a "rxant=LNAW" -g 40 -q "1234 1235 1236 ..."
+```
