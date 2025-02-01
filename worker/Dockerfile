@@ -11,9 +11,12 @@ RUN add-apt-repository -y ppa:ettusresearch/uhd && \
     apt update && \
     apt install -y \
     bladerf libbladerf-dev \
-    libuhd-dev libuhd4.7.0 uhd-host
+    libuhd-dev libuhd4.8.0 uhd-host
 
 ENV UHD_IMAGES_DIR=/usr/share/uhd/images/
+
+# Download UHD images using the built-in uhd_images_downloader
+RUN uhd_images_downloader --destdir /usr/share/uhd/images/
 
 # Install updates and dependencies
 RUN apt -y install cmake libfftw3-dev libmbedtls-dev libboost-program-options-dev libconfig++-dev libsctp-dev git \
