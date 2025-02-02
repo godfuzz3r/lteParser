@@ -11,21 +11,18 @@ RUN add-apt-repository -y ppa:ettusresearch/uhd && \
     apt update && \
     apt install -y \
     bladerf libbladerf-dev \
-    libuhd-dev libuhd4.8.0 uhd-host
+    libuhd-dev libuhd4.8.0 uhd-host \
+    # build dependencies
+    cmake libfftw3-dev libmbedtls-dev libboost-program-options-dev libconfig++-dev libsctp-dev git \
+    libzmq3-dev libboost-system-dev libboost-test-dev libboost-thread-dev libqwt-qt5-dev qtbase5-dev \
+    software-properties-common g++ make pkg-config libpython2-dev python-numpy swig libi2c-dev \
+    libboost-program-options-dev libconfig++-dev libusb-1.0-0-dev libpython3-dev python3-numpy swig \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV UHD_IMAGES_DIR=/usr/share/uhd/images/
 
 # Download UHD images using the built-in uhd_images_downloader
-RUN uhd_images_downloader --destdir /usr/share/uhd/images/
-
-# Install updates and dependencies
-RUN apt -y install cmake libfftw3-dev libmbedtls-dev libboost-program-options-dev libconfig++-dev libsctp-dev git \
-    libzmq3-dev libboost-system-dev libboost-test-dev libboost-thread-dev libqwt-qt5-dev qtbase5-dev \
-    software-properties-common g++ make pkg-config libpython2-dev python-numpy swig libi2c-dev \
-    libboost-program-options-dev libconfig++-dev net-tools iputils-ping libusb-1.0-0-dev libpython3-dev python3-numpy swig \
-    python3-distutils jq curl extrace python3-pip vim
-
-RUN pip3 install tailer
+RUN uhd_images_downloader
 
 # Get SoapySDR, compile and install
 RUN git clone https://github.com/pothosware/SoapySDR.git && \
