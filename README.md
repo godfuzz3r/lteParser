@@ -68,6 +68,18 @@ usage: sib-scan.sh [OPTION]...
   ./sib-scan.sh -b 3 -d /tmp/myoutput.sqlite
 ```
 
+### LimeSDR usage
+
+For limesdr devices consider use `-d soapy` option to avoid long search of UHD devices
+Example:
+```bash
+./sib-scan.sh -d soapy -a "rxant=LNAW" -b 3
+```
+
+### usrp clones usage
+
+Place the custom firmware in ./vol/helpers/uhd_images folder and give it an appropriate name, such as usrp_b210_fpga.bin. It will be automatically placed in the /usr/share/uhd/images/ folder inside the container. It's useful for devices such as USRP B210 LibreSDR clones.
+
 
 ## usage example
 
