@@ -67,4 +67,4 @@ RUN mkdir /vol/
 
 WORKDIR /vol
 
-ENTRYPOINT ["bash", "-c", "cp /vol/helpers/uhd_images/*.bin /usr/share/uhd/images/ && bash"]
+ENTRYPOINT ["bash", "-c", "cp /vol/helpers/uhd_images/*.bin /usr/share/uhd/images/ 2>/dev/null || bash"]
